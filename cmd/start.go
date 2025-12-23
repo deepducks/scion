@@ -23,15 +23,16 @@ var (
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
-	Use:     "start <agent-name> <task...>",
+	Use:     "start <agent-name> [task...]",
 	Aliases: []string{"run"},
 	Short:   "Launch a new scion agent",
 	Long: `Provision and launch a new isolated LLM agent to perform a specific task.
 The agent will be created from a template and run in a detached container.
 
 The agent-name is required as the first argument. All subsequent arguments 
-form the task prompt.`,
-	Args: cobra.MinimumNArgs(2),
+form the task prompt. If no task arguments are provided, the agent will 
+look for a prompt.md file in its root directory.`,
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		agentName = args[0]
 		task := strings.Join(args[1:], " ")
@@ -70,6 +71,28 @@ form the task prompt.`,
 		groveName := config.GetGroveName(projectDir)
 		agentsDir := filepath.Join(projectDir, "agents")
 		agentDir := filepath.Join(agentsDir, agentName)
+
+		promptFile := filepath.Join(agentDir, "prompt.md")
+		promptFileContent := ""
+		if content, err := os.ReadFile(promptFile); err == nil {
+			promptFileContent = strings.TrimSpace(string(content))
+		}
+
+		if task == "" && promptFileContent == "" {
+			return fmt.Errorf("no task provided: prompt.md is empty and no task arguments were given")
+		}
+
+		if task != "" && promptFileContent != "" {
+			return fmt.Errorf("task conflict: both prompt.md and command line arguments provide a task")
+		}
+
+		if task == "" {
+			task = promptFileContent
+		} else if promptFileContent == "" {
+			// Update prompt.md for posterity if it was empty
+			_ = os.WriteFile(promptFile, []byte(task), 0644)
+		}
+
 		agentHome := filepath.Join(agentDir, "home")
 		agentWorkspace := filepath.Join(agentDir, "workspace")
 

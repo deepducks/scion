@@ -78,6 +78,14 @@ func ProvisionAgent(agentName string, templateName string, agentImage string, gr
 		return "", "", nil, fmt.Errorf("failed to create agent home: %w", err)
 	}
 
+	// Create empty prompt.md in agent root
+	promptFile := filepath.Join(agentDir, "prompt.md")
+	if _, err := os.Stat(promptFile); os.IsNotExist(err) {
+		if err := os.WriteFile(promptFile, []byte(""), 0644); err != nil {
+			return "", "", nil, fmt.Errorf("failed to create prompt.md: %w", err)
+		}
+	}
+
 	if util.IsGitRepo() {
 		fmt.Printf("Creating git worktree for agent '%s'...\n", agentName)
 		// Remove existing workspace dir if it exists to allow worktree add
