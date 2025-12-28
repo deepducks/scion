@@ -1,7 +1,6 @@
 {
   "template": "gemini",
   "harness_provider": "gemini",
-    "harness_provider": "gemini",
   "unix_username": "node",
   "image": "gemini-cli-sandbox",
   "use_tmux": true,

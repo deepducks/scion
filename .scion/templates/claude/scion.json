@@ -1,7 +1,6 @@
 {
   "template": "claude",
   "harness_provider": "claude",
-    "harness_provider": "claude",
   "unix_username": "node",
   "image": "claude-code",
   "use_tmux": true,
