@@ -3,120 +3,108 @@
 ## Motivation
 
 Current configuration management suffers from coupled concerns and "tangled" logic.
-- **Runtime vs Container Intersection**: A specific container image might be needed for a specific runtime.
-- **Feature Flags**: Settings like `use_tmux` might apply to some runtimes but not others, or impact container selection.
-- **User Assumptions**: Containers are often built with a specific user (e.g., `node`, `root`) in mind, but this is currently hardcoded or loosely coupled.
-- **Ambiguity**: The distinction between "local" (e.g., Docker Desktop) and "remote" (e.g., K8s cluster) runtimes needs clear separation and "aliasing" capabilities.
+- **Deep Nesting**: Previous designs nested runtimes or providers deeply, making it hard to reuse configurations across different environments.
+- **Runtime vs Container Intersection**: Specific container images are often needed for specific runtimes (e.g., signed images for prod), but hardcoding them is inflexible.
+- **Feature Flags**: Settings like `use_tmux` should be properties of the *environment* (profile), not the runtime definition itself.
+- **Duplication**: Defining the same provider multiple times for different runtimes leads to redundancy and maintenance burden.
 
-## Proposed Structure
+## Proposed Structure: The "Flat Registry" Model
 
-We propose refactoring the `Settings` struct (and the corresponding JSON representation) to use top-level `local` and `remote` blocks. Each block effectively acts as a named configuration profile or "alias".
+We propose a "Relational" approach where `Runtimes`, `Providers`, and `Profiles` are top-level, independent entities. A `Profile` acts as the "glue" that binds a specific Runtime to specific Provider overrides.
 
 ### JSON Schema Draft
 
 ```json
 {
-  "defaults": {
-    "runtime_alias": "local",  // Points to which top-level block to use by default
-    "template": "gemini"
+  "active_profile": "local-dev",
+
+  "runtimes": {
+    "docker-local": { "type": "docker", "host": "unix:///var/run/docker.sock" },
+    "k8s-prod": { "type": "kubernetes", "context": "gke_my-project_us-central1_my-cluster" }
   },
-  "local": {
-    "runtime": {
-      "type": "docker",
-      "host": "unix:///var/run/docker.sock",
-      "use_tmux": true
-    },
-    "providers": [
-      {
-        "name": "gemini",
-        "image": "us-docker.pkg.dev/scion/gemini-cli:latest",
-        "username": "root"
-      },
-      {
-        "name": "claude",
-        "image": "claude-code:latest",
-        "username": "node"
-      }
-    ]
+
+  "providers": {
+    "gemini": { "image": "gemini-cli:base", "user": "root" },
+    "claude": { "image": "claude-code:base", "user": "node" }
   },
-  "remote": {
-    "runtime": {
-      "type": "kubernetes",
-      "context": "gke_my-project_us-central1_my-cluster",
-      "namespace": "scion-agents",
-      "use_tmux": false
-    },
-    "providers": [
-       {
-        "name": "gemini",
-        "image": "us-docker.pkg.dev/scion/gemini-cli:prod",
-        "username": "root"
+
+  "profiles": {
+    "local-dev": {
+      "runtime": "docker-local",
+      "tmux": true,
+      "overrides": {
+        "gemini": { "image": "gemini-cli:dev" }
       }
-    ]
+    },
+    "k8s-prod": {
+      "runtime": "k8s-prod",
+      "tmux": false,
+      "overrides": {
+        "gemini": { "image": "gemini-cli:signed-prod" }
+      }
+    }
   }
 }
 ```
 
 ## Key Concepts
 
-### 1. Top-Level Aliases (`local`, `remote`)
-Instead of a flat structure, we group configurations into logical "environments" or aliases.
-- `local`: Typically for Docker or local process execution.
-- `remote`: Typically for Kubernetes or remote SSH execution.
-- *Extensibility*: We could potentially allow arbitrary keys here (e.g., `remote-staging`, `remote-prod`), but starting with fixed `local`/`remote` simplifies the initial refactor.
+### 1. Flat Registries
+`runtimes` and `providers` are top-level maps. They define **what** is available, not **how** it is used in a specific context. This normalization allows defining "Gemini" or "Docker Local" once and referencing them by name.
 
-### 2. Runtime Block
-The `runtime` block defines **how** the agent is executed.
-- `type`: The underlying runtime engine (`docker`, `kubernetes`, `process`).
-- `use_tmux`: Whether to wrap the command in tmux. This is now context-aware (e.g., might want tmux locally but not on K8s).
-- *Runtime-specific fields*: `host` for Docker, `context`/`namespace` for K8s.
+### 2. Profiles as "Glue"
+A `profile` binds a specific runtime to a set of behavior flags (like `tmux`) and provider overrides. It represents a coherent "environment" (e.g., "Local Development", "Production K8s").
 
-### 3. Providers Array
-The `providers` array defines **what** is executed.
-- It maps a provider name (e.g., "gemini", "claude") to specific artifacts.
-- `image`: The container image to use. This solves the "intersection" problem where `remote` might use a signed production image while `local` uses a `:latest` or locally built image.
-- `username`: Explicitly defines the user the container is built for, removing hardcoded assumptions in the code.
+### 3. Overrides
+Profiles can override specific settings of a provider (like the image tag) without redefining the whole provider. This handles the "intersection" logic cleanly.
 
 ## Impact on Codebase
 
 ### `Settings` Struct
-The Go struct will need to change from a flat list of runtimes to a map or structured nesting.
+The Go struct will change to reflect the relational model.
 
 ```go
-type ProviderConfig struct {
-    Name     string `json:"name"`
-    Image    string `json:"image"`
-    Username string `json:"username"`
-}
-
 type RuntimeConfig struct {
-    Type    string                 `json:"type"` // "docker", "kubernetes"
-    UseTmux bool                   `json:"use_tmux"`
-    Config  map[string]interface{} `json:"config,omitempty"` // Runtime specific (host, context, etc)
-    // Or use specific fields if we want strong typing, but map is more flexible for "Runtime specific"
+    Type string `json:"type"`
+    // Additional fields (host, context, etc.) are flattened in the JSON
+    // and handled via custom unmarshaling or mapstructure.
 }
 
-type EnvironmentConfig struct {
-    Runtime   RuntimeConfig    `json:"runtime"`
-    Providers []ProviderConfig `json:"providers"`
+type ProviderConfig struct {
+    Image string `json:"image"`
+    User  string `json:"user"`
+}
+
+type ProviderOverride struct {
+    Image string `json:"image,omitempty"`
+    User  string `json:"user,omitempty"`
+}
+
+type ProfileConfig struct {
+    Runtime   string                      `json:"runtime"` // Name of the runtime in "runtimes"
+    Tmux      bool                        `json:"tmux"`
+    Overrides map[string]ProviderOverride `json:"overrides,omitempty"` // Key is provider name
 }
 
 type Settings struct {
-    DefaultAlias string                       `json:"default_alias"` // e.g., "local"
-    Environments map[string]EnvironmentConfig `json:"environments"`  // keys: "local", "remote"
+    ActiveProfile string                    `json:"active_profile"`
+    Runtimes      map[string]RuntimeConfig  `json:"runtimes"`
+    Providers     map[string]ProviderConfig `json:"providers"`
+    Profiles      map[string]ProfileConfig  `json:"profiles"`
 }
 ```
 
 ### Resolution Logic
 When starting an agent:
-1. Determine the target environment (alias) from CLI flag (e.g., `--env=remote`) or use `DefaultAlias`.
-2. Load the `EnvironmentConfig` for that alias.
-3. Configure the Runtime using `EnvironmentConfig.Runtime`.
-4. Lookup the Provider settings (based on the agent's template/provider) in `EnvironmentConfig.Providers`.
-5. Combine these to form the final `RunConfig`.
+1.  **Determine Active Profile**: Check CLI arg (`--profile`), then `active_profile` in JSON, then default.
+2.  **Load Profile**: Look up the profile in `profiles`.
+3.  **Resolve Runtime**: Look up the referenced runtime name in `runtimes` to get the base runtime config.
+4.  **Resolve Provider**: Look up the requested provider in `providers` to get the base provider config.
+5.  **Apply Overrides**: Apply any `overrides` found in the `ProfileConfig` to the `ProviderConfig`.
+6.  **Construct RunConfig**: Combine the resolved Runtime, Provider, and Profile settings (like `tmux`).
 
 ## Benefits
-- **Clarity**: It's obvious which image is used in which context.
-- **Flexibility**: "tmux" decision is coupled to the runtime environment, not the agent itself.
-- **Portability**: Users can have different `remote` settings (different clusters) without changing the agent's definition.
-- **Decoupling**: Removes "node" vs "root" username assumptions from the Go code.
+- **Clean Separation**: Runtimes and Providers are independent. Adding a new runtime doesn't require touching provider configs.
+- **Normalization**: "Gemini" is defined once. "K8s Prod" is defined once. They are mixed and matched via Profiles.
+- **Flexibility**: Profiles allow "patching" logic (overrides) without deep nesting or duplication.
+- **Clarity**: It is easy to see the "base" state of a provider and exactly how it changes per profile.
