@@ -2,19 +2,17 @@ package templatecache
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/ptone/scion-agent/pkg/hubclient"
+	"github.com/ptone/scion-agent/pkg/transfer"
 )
 
 // HubConnectivityError indicates the Hub is unreachable.
@@ -183,7 +181,7 @@ func (h *Hydrator) Hydrate(ctx context.Context, templateRef string) (string, err
 
 		// Verify hash if provided
 		if fileInfo.Hash != "" {
-			actualHash := computeHash(content)
+			actualHash := transfer.HashBytes(content)
 			if actualHash != fileInfo.Hash {
 				return "", fmt.Errorf("hash mismatch for file %s: expected %s, got %s",
 					fileInfo.Path, fileInfo.Hash, actualHash)
@@ -204,7 +202,7 @@ func (h *Hydrator) Hydrate(ctx context.Context, templateRef string) (string, err
 	contentHash := template.ContentHash
 	if contentHash == "" {
 		// Compute content hash if not provided
-		contentHash = computeContentHash(files)
+		contentHash = h.computeContentHash(files)
 	}
 
 	newCachePath, storeErr := h.cache.Store(template.ID, contentHash, files)
@@ -263,31 +261,16 @@ func DefaultHydratorConfig() HydratorConfig {
 	}
 }
 
-// computeHash computes a SHA256 hash of content and returns it as a hex string.
-func computeHash(content []byte) string {
-	hash := sha256.Sum256(content)
-	return hex.EncodeToString(hash[:])
-}
-
 // computeContentHash computes an aggregate hash of all template files.
-func computeContentHash(files map[string][]byte) string {
-	// Sort paths for deterministic ordering
-	var paths []string
-	for path := range files {
-		paths = append(paths, path)
+func (h *Hydrator) computeContentHash(files map[string][]byte) string {
+	var fileInfos []transfer.FileInfo
+	for path, content := range files {
+		fileInfos = append(fileInfos, transfer.FileInfo{
+			Path: path,
+			Hash: transfer.HashBytes(content),
+		})
 	}
-	sort.Strings(paths)
-
-	// Combine all file hashes
-	h := sha256.New()
-	for _, path := range paths {
-		h.Write([]byte(path))
-		h.Write([]byte{0})
-		h.Write(files[path])
-		h.Write([]byte{0})
-	}
-
-	return hex.EncodeToString(h.Sum(nil))
+	return transfer.ComputeContentHash(fileInfos)
 }
 
 // readFileFromPath reads the entire contents of a file.

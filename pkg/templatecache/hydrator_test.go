@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ptone/scion-agent/pkg/hubclient"
+	"github.com/ptone/scion-agent/pkg/transfer"
 )
 
 // mockTemplateService is a mock implementation of hubclient.TemplateService.
@@ -110,8 +111,8 @@ func TestHydrateSuccess(t *testing.T) {
 		requestDownloadURLs: func(ctx context.Context, templateID string) (*hubclient.DownloadResponse, error) {
 			return &hubclient.DownloadResponse{
 				Files: []hubclient.DownloadURLInfo{
-					{Path: "scion-agent.yaml", URL: "file:///tmp/test1", Hash: computeHash([]byte("harness: claude\n"))},
-					{Path: "home/config.txt", URL: "file:///tmp/test2", Hash: computeHash([]byte("config data"))},
+					{Path: "scion-agent.yaml", URL: "file:///tmp/test1", Hash: transfer.HashBytes([]byte("harness: claude\n"))},
+					{Path: "home/config.txt", URL: "file:///tmp/test2", Hash: transfer.HashBytes([]byte("config data"))},
 				},
 				Expires: time.Now().Add(time.Hour),
 			}, nil
@@ -345,7 +346,7 @@ func TestPrefetchTemplate(t *testing.T) {
 		requestDownloadURLs: func(ctx context.Context, templateID string) (*hubclient.DownloadResponse, error) {
 			return &hubclient.DownloadResponse{
 				Files: []hubclient.DownloadURLInfo{
-					{Path: "test.txt", URL: "mock://test", Hash: computeHash([]byte("prefetch content"))},
+					{Path: "test.txt", URL: "mock://test", Hash: transfer.HashBytes([]byte("prefetch content"))},
 				},
 			}, nil
 		},
