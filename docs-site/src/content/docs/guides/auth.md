@@ -108,7 +108,7 @@ export SCION_DEV_TOKEN=scion_dev_...
 
 Users can authenticate the CLI against a Scion Hub using the following flow:
 
-1.  **Login**: `scion hub login` opens a browser to the dashboard login page.
+1.  **Login**: `scion hub auth login` opens a browser to the dashboard login page.
 2.  **Exchange**: After successful login, the dashboard provides a token (or the CLI exchanges a code).
 3.  **Storage**: The token is stored in `~/.scion/config.json`.
 

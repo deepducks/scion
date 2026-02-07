@@ -141,7 +141,6 @@ X-Scion-Signature: HMAC-SHA256(secret, "{brokerId}:{timestamp}:{nonce}:GET:/api/
   "groves": [
     {
       "groveId": "string",
-      "mode": "connected",
       "profiles": ["docker", "k8s-dev"]
     }
   ],
@@ -167,8 +166,7 @@ X-Scion-Signature: HMAC-SHA256(secret, "{brokerId}:{timestamp}:{nonce}:GET:/api/
   "groves": [
     {
       "groveId": "string",
-      "groveName": "string",
-      "mode": "connected"
+      "groveName": "string"
     }
   ]
 }

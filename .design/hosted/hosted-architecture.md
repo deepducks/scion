@@ -38,25 +38,17 @@ The operating mode (Solo vs Hub-connected) must always be **explicit and unambig
 *   `--no-hub` flag provides per-invocation override to force local mode
 *   When Hub is enabled but unavailable/misconfigured, CLI commands return an error with guidance to either fix the Hub connection or run `scion hub disable`
 
-### Modes
+### Connectivity and Permissions
 
-#### Solo
-The scion CLI operates in its traditional local way. State storage is in the form of files in the agent folders and labels on running containers. No Hub connectivity.
+Operational capabilities are determined by the **permissions system**. A Runtime Broker is either **Online** (connected to the Hub) or **Offline**.
 
-#### Read-Only (Reporting)
-The grove is registered with a Hub for visibility, but the Hub cannot control agent lifecycle. The local CLI/Manager remains the source of truth and reports state changes to the Hub:
-*   Local state files remain authoritative
-*   The `sciontool` dual-writes status to both local state and Hub
-*   Commands like `scion list` consult local state
-*   A background daemon maintains the Hub connection and sends heartbeats
-*   The Hub can observe agents but not create/start/stop/delete them
+When a broker is Online, the operations it can perform or receive are governed by policies:
+*   **Agent Lifecycle**: Permissions like `agent:create`, `agent:stop`, and `agent:delete` determine if the Hub can command the broker to modify agents.
+*   **Visibility**: Permissions like `agent:read` determine if the broker's agents are visible in the Hub dashboard and CLI.
+*   **Reporting**: Runtime brokers automatically report status and heartbeats to the Hub when connected, providing real-time visibility based on the user's access level.
 
-#### Connected (Full Control)
-The grove is fully managed through the Hub. The Hub has complete control over agent lifecycle:
-*   Hub is the source of truth for agent state
-*   The Hub can create, start, stop, and delete agents on behalf of users
-*   Multiple runtime brokers can contribute to the same grove
-*   Web-based PTY and management are available
+#### Solo Mode
+Standalone operation where the `scion` CLI acts as its own manager using local file state and labels. No Hub connectivity is required or used.
 
 ## 2. Goals & Scope
 *   **Grove-Centric Registration:** Groves are the unit of registration with the Hub. Runtime brokers register the groves they serve.
@@ -154,9 +146,6 @@ A compute node with access to one or more container runtimes. Brokers do not reg
     *   **Kubernetes:** Cluster-based pod orchestration
     *   **Apple:** macOS virtualization framework
 *   **Profile Execution:** Brokers advertise which grove profiles they can execute based on available runtimes.
-*   **Operational Modes:** (See Section 1)
-    *   **Connected:** Hub has full agent lifecycle control
-    *   **Read-Only:** Hub can observe but not control
 *   **Agent Communication:** Configures the `sciontool` inside agents to report status back to the Hub.
 
 ### 4.4. Scion Tool (Agent-Side)
@@ -246,7 +235,7 @@ sequenceDiagram
 ### 5.4. Standalone Mode (Solo)
 *   The Scion CLI acts as both the **Hub** (using local file DB) and the **Runtime Broker** (using Docker).
 *   No Hub registration or external network dependencies required.
-*   Can be upgraded to Read-Only mode by configuring a Hub endpoint.
+*   Can be upgraded to Hub-connected mode by configuring a Hub endpoint.
 
 ## 6. Environment Variables & Secrets Management
 

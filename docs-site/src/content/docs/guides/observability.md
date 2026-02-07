@@ -22,8 +22,9 @@ Scion provides comprehensive observability for agent containers through the `sci
 │              │   telemetry     │       │
 │              │   pipeline      │       │
 │              └────────┬────────┘       │
-│                       │                │
-└───────────────────────┼────────────────┘
+│                       │ Traces, Metrics,│
+│                       │ Correlated Logs │
+└───────────────────────┼─────────────────┘
                         │
                         ▼
               ┌─────────────────┐
@@ -34,15 +35,23 @@ Scion provides comprehensive observability for agent containers through the `sci
 
 ## Agent Logs
 
-Agent logs are written to `~/agent.log` inside the container. The sciontool logging system writes to both stderr and this file.
+Agent logs are written to `/home/scion/agent.log` inside the container. The sciontool logging system writes to both stderr and this file.
+
+### Log Ownership and Permissions
+
+The `sciontool` utility ensures that `agent.log` is owned by the `scion` user during initialization, even if `sciontool` is initially run as root. The log file is created with permissive `0666` permissions to ensure multiple processes can contribute to the log stream.
+
+If the primary log location is not writable, `sciontool` will automatically fall back to `/tmp/agent.log` and enable debug logging.
 
 ### Log Levels
 
 - **INFO**: Normal operational events
 - **ERROR**: Critical failures
-- **DEBUG**: Detailed information (enabled with `SCION_DEBUG=true`)
+- **DEBUG**: Detailed information (enabled with `SCION_DEBUG=true` or `--log-level=debug`)
 
 ### Log Format
+
+Logs from `sciontool` and shared packages using `slog` are unified:
 
 ```
 2026-02-05 10:30:00 [sciontool] [INFO] Telemetry pipeline started (gRPC: 4317, HTTP: 4318)
@@ -54,7 +63,7 @@ Agent logs are written to `~/agent.log` inside the container. The sciontool logg
 From inside the container:
 
 ```bash
-tail -f ~/agent.log
+tail -f /home/scion/agent.log
 ```
 
 From the host (if volume mounted):
@@ -72,6 +81,8 @@ The telemetry pipeline in sciontool collects and forwards OpenTelemetry (OTLP) d
 | Data Type | Source | Description |
 |-----------|--------|-------------|
 | Traces | Agent OTLP | Span data for tool calls, API requests |
+| Metrics | sciontool | Counters and histograms for tokens, tools, and latency |
+| Correlated Logs | sciontool | Log records linked to traces for every hook event |
 | Hook Events | Harness hooks | Tool calls, prompts, model invocations converted to spans |
 | Session Metrics | Gemini session files | Token counts, turn counts, tool statistics |
 | Lifecycle Events | sciontool | Pre-start, post-start, pre-stop, session-end |

@@ -14,10 +14,30 @@ To join a team environment, you first need to connect your local CLI to the team
 scion config set hub.endpoint https://scion.yourcompany.com
 
 # Login via the browser
-scion hub login
+scion hub auth login
 ```
 
 Once authenticated, your CLI will route agent operations through the Hub instead of running them purely locally.
+
+## Verifying Connection
+
+You can check your connection status and authentication details at any time:
+
+```bash
+scion hub status
+```
+
+This will show:
+- Whether Hub integration is enabled.
+- The configured Hub endpoint.
+- Your authentication method (e.g., OAuth, Dev Auth).
+- Your user identity, role, and token expiration.
+- Connection health to the Hub.
+
+For automated tooling, use the `--json` flag:
+```bash
+scion hub status --json
+```
 
 ## Registering a Grove
 
@@ -27,12 +47,23 @@ In a team environment, a "Grove" represents a shared project or repository.
 2.  Register the grove: `scion hub register`
 3.  The Hub will link your local project (via its Git remote) to a central Grove ID.
 
+To see all groves you have access to on the Hub:
+```bash
+scion hub groves
+```
+
 ## Shared Infrastructure
 
 When you start an agent in a team workflow, the Hub dispatches it to an available **Runtime Broker**.
 - **Isolation**: Each team member's agents run in isolated containers.
 - **Persistence**: Agent state and logs are centralized on the Hub, making them visible to other team members (based on permissions).
 - **Resources**: Offload agent execution from your local machine to powerful remote servers or Kubernetes clusters.
+
+To see the available runtime brokers in your cluster:
+```bash
+scion hub brokers
+```
+This shows the status and "Last Seen" timestamp for each broker, helping you identify which nodes are currently online.
 
 ## Managing Secrets
 

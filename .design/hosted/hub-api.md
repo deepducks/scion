@@ -122,7 +122,6 @@ Represents a project or logical grouping of agents. **Groves are the primary uni
     {
       "brokerId": "string",
       "brokerName": "string",
-      "mode": "connected",     // connected, read-only
       "status": "online",      // online, offline
       "profiles": ["docker", "k8s-dev"],  // Profiles this broker can execute
       "lastSeen": "2025-01-24T10:29:00Z"
@@ -159,7 +158,6 @@ Represents a compute node that contributes to one or more groves. **Runtime brok
   "slug": "string",            // URL-safe identifier
 
   "type": "string",            // Primary runtime type: docker, kubernetes, apple
-  "mode": "string",            // Operational mode: connected, read-only
   "version": "string",         // Scion broker agent version (for compatibility)
 
   "status": "string",          // online, offline, degraded
@@ -517,13 +515,13 @@ Internal endpoint for agents to report status updates.
 - Reporting events/logs for the specific agent
 - Cannot access other agents or Hub resources
 
-### 3.9 Sync Agent (Read-Only Mode)
+### 3.9 Sync Agent
 
 ```
 PUT /api/v1/agents/{agentId}
 ```
 
-Upsert endpoint for Runtime Brokers in read-only mode to register locally-created agents with the Hub. If the agent doesn't exist, it is created; if it exists, its state is updated.
+Upsert endpoint for Runtime Brokers to register locally-created agents with the Hub. This is typically used by brokers that are managing agents independently of the Hub's lifecycle control. If the agent doesn't exist, it is created; if it exists, its state is updated.
 
 **Request Body:**
 ```json
@@ -629,7 +627,6 @@ This is the **primary registration endpoint** for runtime brokers. It performs a
   },
 
   "profiles": ["docker", "k8s-dev"],  // Profiles this broker can execute for this grove
-  "mode": "connected",         // connected, read-only
 
   "labels": {"key": "value"},
   "annotations": {"key": "value"}
@@ -708,7 +705,6 @@ Returns runtime brokers contributing to this grove.
     {
       "brokerId": "string",
       "brokerName": "string",
-      "mode": "connected",
       "status": "online",
       "profiles": ["docker", "k8s-dev"],
       "agentCount": 2,
@@ -775,7 +771,6 @@ GET /api/v1/runtime-brokers
 |-----------|------|-------------|
 | `type` | string | Filter by type (docker, kubernetes, apple) |
 | `status` | string | Filter by status (online, offline) |
-| `mode` | string | Filter by mode (connected, read-only) |
 | `groveId` | string | Filter by grove contribution |
 
 ### 5.2 Get Runtime Broker
@@ -800,7 +795,6 @@ Returns groves this broker contributes to.
       "groveId": "string",
       "groveName": "string",
       "gitRemote": "string",
-      "mode": "connected",
       "profiles": ["docker", "k8s-dev"],
       "agentCount": 2
     }
@@ -1507,7 +1501,6 @@ Once the WebSocket is established with HMAC authentication, Hub→Broker command
   "groves": [                  // Groves this broker is contributing to
     {
       "groveId": "string",
-      "mode": "connected",
       "profiles": ["docker", "k8s-dev"]
     }
   ],
@@ -1533,8 +1526,7 @@ Once the WebSocket is established with HMAC authentication, Hub→Broker command
   "groves": [                  // Confirmed grove associations
     {
       "groveId": "string",
-      "groveName": "string",
-      "mode": "connected"
+      "groveName": "string"
     }
   ]
 }
@@ -1714,15 +1706,15 @@ The Hub maps incoming client WebSocket connections (e.g., `/agents/{id}/pty`) to
 }
 ```
 
-### 11.8 Read-Only Mode
+### 11.8 Independent Broker Management
 
-In read-only mode, the Runtime Broker:
-- Establishes control channel connection
-- Sends `agent_status` events for locally-managed agents
-- Ignores `create_agent`, `stop_agent`, `delete_agent` commands (returns error)
-- Supports `open_stream` for PTY/logs observation
+When a Runtime Broker manages agents independently of Hub lifecycle control (governed by the permissions system):
+- It establishes a control channel connection for visibility.
+- It sends `agent_status` events for locally-managed agents to the Hub.
+- If the Hub lacks the necessary permissions to manage agents on the broker, lifecycle commands (`create_agent`, `stop_agent`, `delete_agent`) will be rejected with an error.
+- It can still support `open_stream` for PTY/logs observation if permitted.
 
-The Hub tracks these agents but cannot control their lifecycle.
+The Hub tracks these agents but cannot control their lifecycle without the appropriate permissions.
 
 ### 11.9 Transport Selection
 

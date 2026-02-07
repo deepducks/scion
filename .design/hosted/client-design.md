@@ -613,7 +613,6 @@ type RegisterGroveRequest struct {
     Path      string            `json:"path"`
     Broker    *BrokerInfo       `json:"broker"`
     Profiles  []string          `json:"profiles,omitempty"`
-    Mode      string            `json:"mode"` // connected, read-only
     Labels    map[string]string `json:"labels,omitempty"`
 }
 
@@ -693,7 +692,6 @@ type RuntimeBrokerService interface {
 type ListBrokersOptions struct {
     Type    string // Filter by type (docker, kubernetes, apple)
     Status  string // Filter by status (online, offline)
-    Mode    string // Filter by mode (connected, read-only)
     GroveID string // Filter by grove contribution
     Page    apiclient.PageOptions
 }
@@ -721,7 +719,6 @@ type BrokerGroveInfo struct {
     GroveID    string   `json:"groveId"`
     GroveName  string   `json:"groveName"`
     GitRemote  string   `json:"gitRemote,omitempty"`
-    Mode       string   `json:"mode"`
     Profiles   []string `json:"profiles,omitempty"`
     AgentCount int      `json:"agentCount"`
 }
@@ -1147,7 +1144,6 @@ type Grove struct {
 type GroveContributor struct {
     BrokerID  string    `json:"brokerId"`
     BrokerName string   `json:"brokerName"`
-    Mode      string    `json:"mode"`
     Status    string    `json:"status"`
     Profiles  []string  `json:"profiles,omitempty"`
     LastSeen  time.Time `json:"lastSeen,omitempty"`
@@ -1177,7 +1173,6 @@ type RuntimeBroker struct {
     Name               string            `json:"name"`
     Slug               string            `json:"slug"`
     Type               string            `json:"type"`
-    Mode               string            `json:"mode"`
     Version            string            `json:"version"`
     Status             string            `json:"status"`
     ConnectionState    string            `json:"connectionState"`
@@ -1683,7 +1678,6 @@ func main() {
             },
             SupportedHarnesses: []string{"claude", "gemini"},
         },
-        Mode:     "connected",
         Profiles: []string{"docker", "k8s-dev"},
     })
     if err != nil {

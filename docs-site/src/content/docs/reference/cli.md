@@ -88,8 +88,10 @@ Deletes an agent, removing its container, home directory, and worktree.
 
 Manages the Scion workspace (Grove).
 
-- `scion grove init`: Initialize a new grove in the current directory.
+- `scion grove init`: Initialize a new grove. By default, creates a `.scion` directory in the current directory or the root of the current git repository.
+    - Flags: `--global` (Initialize the global grove in the home directory)
     - **Note:** If you are in a git repository, add `.scion/agents` to your `.gitignore` to avoid issues with nested git worktrees: `echo ".scion/agents" >> .gitignore`
+    - **Hub Integration:** If a Hub endpoint is configured, `init` will prompt to register the new grove with the Hub.
 
 ## `scion templates`
 
@@ -106,3 +108,20 @@ Manages agent templates.
     - Use `--yes` / `-y` to skip confirmation (deletes both when template exists in both locations).
     - Use `--no-hub` to skip the Hub check and treat as local-only.
 - `update-default`: Update default templates from the binary.
+
+## `scion hub`
+
+Manages connection to and interaction with a Scion Hub.
+
+- `scion hub status`: Show the current Hub connection status and authentication details.
+    - Flags: `--json` (Output in JSON format)
+- `scion hub auth login`: Authenticate against the Hub (opens a browser).
+- `scion hub register [grove-path]`: Register the current broker and grove with the Hub.
+- `scion hub enable`: Enable Hub integration for agent operations.
+- `scion hub disable`: Disable Hub integration, falling back to local-only mode.
+- `scion hub groves`: List all groves registered on the Hub.
+- `scion hub brokers`: List all runtime brokers registered on the Hub.
+- `scion hub secret`: Manage secrets on the Hub.
+    - `set <key>=<value>`: Set a secret for the current grove.
+    - `list`: List secrets for the current grove.
+    - `remove <key>`: Remove a secret.

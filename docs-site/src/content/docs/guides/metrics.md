@@ -11,7 +11,31 @@ The telemetry system in sciontool:
 
 - **Receives OTLP data** via embedded gRPC (port 4317) and HTTP (port 4318) receivers
 - **Filters events** based on include/exclude patterns for privacy control
-- **Forwards traces** to cloud OTLP endpoints (Google Cloud, or any OTLP-compatible backend)
+- **Forwards traces and metrics** to cloud OTLP endpoints (Google Cloud, or any OTLP-compatible backend)
+- **Emits correlated logs** alongside spans for system events
+
+## Native Metrics Pipeline
+
+Scion includes a native OTel metrics pipeline that captures operational data from agent sessions. This data is recorded as counters and histograms, providing a time-series view of agent performance.
+
+### Automated Metrics Collection
+
+When harness events occur (via hooks), sciontool automatically records the following metrics:
+
+| Metric | Type | Unit | Description |
+|--------|------|------|-------------|
+| `gen_ai.tokens.input` | Counter | tokens | Number of input tokens processed |
+| `gen_ai.tokens.output` | Counter | tokens | Number of output tokens generated |
+| `gen_ai.tokens.cached` | Counter | tokens | Number of tokens retrieved from cache |
+| `agent.tool.calls` | Counter | calls | Total number of tool executions |
+| `agent.tool.duration` | Histogram | ms | Latency of tool executions |
+| `agent.session.count` | Counter | sessions | Total number of agent sessions |
+| `gen_ai.api.calls` | Counter | calls | Total number of LLM API requests |
+| `gen_ai.api.duration` | Histogram | ms | Latency of LLM API requests |
+
+### Correlated Logs
+
+For every significant lifecycle event (session start/end, tool use, model call), sciontool emits an OTel log record that is automatically correlated with the active trace. This means when viewing a trace waterfall in your observability backend (like Google Cloud Trace), you can click directly through to the specific logs associated with each span.
 
 ## Configuration
 

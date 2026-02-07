@@ -23,7 +23,7 @@ The Scion Hosted architecture is partially implemented. The core "backend" compo
 ### 2.2 Runtime Broker API (`pkg/runtimebroker`)
 *   **Status:** ✅ **Partially Complete**
 *   **Implemented:**
-    *   Server structure and mode switching (Connected vs Read-Only).
+    *   Server structure.
     *   Agent Manager adaptation (`agent.Manager`).
     *   **Co-location Dispatcher:** `cmd/server.go` contains logic (`registerGlobalGroveAndBroker`, `newAgentDispatcherAdapter`) to automatically register the local broker with the Hub, enabling a seamless "out of the box" experience.
 *   **Missing:**

@@ -202,9 +202,6 @@ server:
     # Hub endpoint for status reporting (when Hub not co-located)
     hubEndpoint: ""  # Empty = localhost:9810 if Hub enabled, else disabled
 
-    # Operational mode
-    mode: "connected"  # connected, read-only
-
   # Hub API settings
   hub:
     enabled: false
@@ -403,7 +400,6 @@ GET /healthz
 {
   "status": "healthy",
   "version": "1.2.3",
-  "mode": "connected",
   "uptime": "2h15m30s",
   "checks": {
     "docker": "healthy",
@@ -814,10 +810,10 @@ The Web Frontend implementation will be specified in a dedicated document. Consi
 
 ## 13. Deployment Patterns
 
-### 13.1 Developer Laptop (Solo + Read-Only)
+### 13.1 Developer Laptop (Local Management)
 
 ```bash
-# Start Runtime Broker in read-only mode, reporting to team Hub
+# Start Runtime Broker reporting to team Hub
 scion server start --enable-runtime-broker --background
 ```
 
@@ -825,7 +821,6 @@ scion server start --enable-runtime-broker --background
 server:
   runtimeBroker:
     enabled: true
-    mode: "read-only"
     hubEndpoint: "https://hub.team.example.com"
 ```
 
@@ -851,7 +846,6 @@ server:
       clientId: "scion-dashboard"
   runtimeBroker:
     enabled: true
-    mode: "connected"
     # hubEndpoint auto-detected as localhost:9810
   tls:
     enabled: true
@@ -870,7 +864,6 @@ scion server start --enable-runtime-broker
 server:
   runtimeBroker:
     enabled: true
-    mode: "connected"
     hubEndpoint: "https://hub.scion.cloud"
   tls:
     enabled: true

@@ -39,23 +39,15 @@ Both transports use **identical command semantics**. The Hub selects the transpo
   - **Direct:** Hub connects to Broker IP/DNS (e.g., internal K8s service or public IP).
   - **Control Channel:** Broker establishes persistent WebSocket to Hub; Hub routes requests through this channel (for brokers behind firewalls/NAT).
 
-### 1.4. Operational Modes
+### 1.4. Connectivity and Permissions
 
-The Broker runs in one of three modes, affecting API availability:
+Operational capabilities are determined by the **permissions system**. A Runtime Broker is either **Online** (connected to the Hub) or **Offline**.
 
-| Mode | Description | Available Endpoints |
-|------|-------------|---------------------|
-| **Connected** | Hub has full control | All endpoints |
-| **Read-Only** | Broker reports status; Hub cannot modify | GET endpoints, `/attach` (optional) |
-| **Solo** | API disabled; managed via CLI only | None |
+When a Runtime Broker is connected to a Hub, it reports status and heartbeats. The specific operations it can perform (or commands it will accept from the Hub) are governed by policies:
+- **Lifecycle Management**: If permitted, the broker accepts commands to create, start, stop, and delete agents.
+- **Observation**: If limited to read-only permissions, the broker will only accept status queries and log streaming requests, rejecting lifecycle commands with a `403 Forbidden` error.
 
-**Read-Only Mode Disabled Endpoints** (return `405 Method Not Allowed`):
-- `POST /api/v1/agents` (create)
-- `POST /api/v1/agents/{agentId}/start`
-- `POST /api/v1/agents/{agentId}/stop`
-- `POST /api/v1/agents/{agentId}/restart`
-- `DELETE /api/v1/agents/{agentId}`
-- `POST /api/v1/agents/{agentId}/message`
+In **Solo Mode** (Hub integration disabled), the API server may be disabled or limited to local-only traffic.
 
 ## 2. Authentication & Security
 
@@ -521,7 +513,6 @@ GET /healthz
 {
   "status": "healthy",
   "version": "1.2.3",
-  "mode": "connected",
   "agentCount": 5,
   "uptime": "48h30m"
 }
@@ -539,7 +530,6 @@ GET /api/v1/info
   "brokerId": "broker-abc",
   "name": "Production K8s East",
   "version": "1.2.3",
-  "mode": "connected",
   "type": "kubernetes",
   "capabilities": {
     "webPty": true,

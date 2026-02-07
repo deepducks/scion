@@ -242,7 +242,6 @@ curl -s -X POST http://localhost:9810/api/v1/groves/register \
   -d '{
     "gitRemote": "https://github.com/myorg/another-project",
     "name": "Another Project",
-    "mode": "connected",
     "broker": {
       "name": "My Workstation",
       "version": "0.1.0",

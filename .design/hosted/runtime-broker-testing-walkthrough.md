@@ -30,7 +30,7 @@ You should see output like:
 2025/01/25 10:00:00 Starting Hub API server on 0.0.0.0:9810
 2025/01/25 10:00:00 Database: sqlite (/Users/you/.scion/hub.db)
 2025/01/25 10:00:00 Hub API server starting on 0.0.0.0:9810
-2025/01/25 10:00:00 Starting Runtime Broker API server on 0.0.0.0:9800 (mode: connected)
+2025/01/25 10:00:00 Starting Runtime Broker API server on 0.0.0.0:9800
 2025/01/25 10:00:00 Runtime Broker API server starting on 0.0.0.0:9800
 2025/01/25 10:00:00 Agent dispatcher configured for co-located runtime broker
 2025/01/25 10:00:00 Registered global grove with runtime broker your-hostname
@@ -70,7 +70,6 @@ Expected response:
 {
   "status": "healthy",
   "version": "0.1.0",
-  "mode": "connected",
   "uptime": "5s",
   "checks": {
     "container": "available"
@@ -105,7 +104,6 @@ Expected response:
   "brokerId": "abc123-...",
   "name": "",
   "version": "0.1.0",
-  "mode": "connected",
   "type": "container",
   "capabilities": {
     "webPty": false,
@@ -396,7 +394,6 @@ curl -s -X POST http://localhost:9810/api/v1/groves/register \
     "gitRemote": "https://github.com/myorg/myproject.git",
     "name": "My Project",
     "path": "/path/to/myproject/.scion",
-    "mode": "connected",
     "broker": {
       "name": "My MacBook",
       "version": "0.1.0",
@@ -484,7 +481,6 @@ Expected response (note the `localPath` field included for each broker):
       "name": "Local Mac",
       "slug": "local-mac",
       "type": "container",
-      "mode": "connected",
       "version": "0.1.0",
       "status": "online",
       "connectionState": "connected",
@@ -668,10 +664,10 @@ echo "=== 1. Health Checks ==="
 echo "Hub:"
 curl -s $HUB_URL/healthz | jq '.status'
 echo "Runtime Broker:"
-curl -s $BROKER_URL/healthz | jq '{status, mode, checks}'
+curl -s $BROKER_URL/healthz | jq '{status, checks}'
 
 echo -e "\n=== 2. Runtime Broker Info ==="
-curl -s $BROKER_URL/api/v1/info | jq '{type, mode, capabilities}'
+curl -s $BROKER_URL/api/v1/info | jq '{type, capabilities}'
 
 echo -e "\n=== 3. Register Grove with Broker ==="
 GROVE_RESPONSE=$(curl -s -X POST $HUB_URL/api/v1/groves/register \
@@ -679,7 +675,6 @@ GROVE_RESPONSE=$(curl -s -X POST $HUB_URL/api/v1/groves/register \
   -d '{
     "gitRemote": "https://github.com/test/demo-project",
     "name": "Demo Project",
-    "mode": "connected",
     "broker": {
       "name": "Test Mac",
       "version": "0.1.0",
