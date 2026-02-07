@@ -409,9 +409,6 @@ func (s *Server) deleteAgent(w http.ResponseWriter, r *http.Request, id string) 
 		}
 	}
 
-	// Stop the agent first (like the CLI does), ignore error if already stopped
-	_ = s.manager.Stop(ctx, id)
-
 	_, err = s.manager.Delete(ctx, id, deleteFiles, grovePath, removeBranch)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {

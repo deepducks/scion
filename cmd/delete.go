@@ -126,9 +126,6 @@ var deleteCmd = &cobra.Command{
 
 		fmt.Printf("Deleting agent '%s'...\n", agentName)
 
-		// Try to stop first, ignore error if already stopped
-		_ = mgr.Stop(context.Background(), agentName)
-
 		// We check if it exists in List to provide better feedback
 		agents, _ := mgr.List(context.Background(), map[string]string{"scion.name": agentName})
 		containerFound := false

@@ -557,7 +557,12 @@ func (r *KubernetesRuntime) Delete(ctx context.Context, id string) error {
 
 	namespace := r.DefaultNamespace
 	// 'id' is the pod name
-	err := r.Client.Clientset.CoreV1().Pods(namespace).Delete(ctx, id, metav1.DeleteOptions{})
+	// Use GracePeriodSeconds=0 for immediate termination since Delete is used
+	// for force-removal (e.g. scion rm), not graceful shutdown.
+	gracePeriod := int64(0)
+	err := r.Client.Clientset.CoreV1().Pods(namespace).Delete(ctx, id, metav1.DeleteOptions{
+		GracePeriodSeconds: &gracePeriod,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to delete pod: %w", err)
 	}

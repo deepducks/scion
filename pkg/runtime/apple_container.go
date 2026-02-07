@@ -52,8 +52,9 @@ func (r *AppleContainerRuntime) Stop(ctx context.Context, id string) error {
 }
 
 func (r *AppleContainerRuntime) Delete(ctx context.Context, id string) error {
-	// For container, we might need to stop it first if we want to delete it,
-	// but 'rm' usually works if it's stopped.
+	// Apple's `container rm` doesn't support -f and fails on running containers,
+	// so stop first (ignoring errors if already stopped) then remove.
+	_, _ = runSimpleCommand(ctx, r.Command, "stop", id)
 	_, err := runSimpleCommand(ctx, r.Command, "rm", id)
 	return err
 }
