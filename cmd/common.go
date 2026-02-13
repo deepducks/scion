@@ -406,7 +406,7 @@ func startAgentViaHub(hubCtx *HubContext, agentName, task string, resume bool) e
 
 	// Detect non-git grove for workspace bootstrap
 	var workspaceFiles []transfer.FileInfo
-	if hubCtx.GrovePath != "" && task != "" {
+	if hubCtx.GrovePath != "" {
 		groveDir := filepath.Dir(hubCtx.GrovePath) // parent of .scion
 		if !util.IsGitRepoDir(groveDir) {
 			files, err := transfer.CollectFiles(groveDir, transfer.DefaultExcludePatterns)

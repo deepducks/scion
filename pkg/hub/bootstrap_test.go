@@ -639,12 +639,10 @@ func TestCreateThenStartWithoutTask(t *testing.T) {
 		t.Fatalf("create: expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Step 2: Start the agent without a task but with attach
-	// (no prompt check needed with attach)
+	// Step 2: Start the agent without a task — task is optional
 	startBody := CreateAgentRequest{
 		Name:    "staged-agent-2",
 		GroveID: groveID,
-		Attach:  true,
 	}
 	rec = doBootstrapRequest(t, srv, http.MethodPost, "/api/v1/agents", startBody)
 	if rec.Code != http.StatusOK {

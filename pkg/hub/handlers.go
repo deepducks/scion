@@ -16,7 +16,6 @@ package hub
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -155,7 +154,7 @@ type CreateAgentRequest struct {
 	Workspace     string            `json:"workspace,omitempty"`
 	Labels        map[string]string `json:"labels,omitempty"`
 	Config        *AgentConfigOverride `json:"config,omitempty"`
-	Attach        bool              `json:"attach,omitempty"` // If true, dispatch the agent even without a task (for interactive attach mode)
+	Attach        bool              `json:"attach,omitempty"` // If true, signals interactive attach mode to the broker/harness
 	ProvisionOnly bool              `json:"provisionOnly,omitempty"` // If true, provision only (write task to prompt.md) without starting
 	// WorkspaceFiles is populated for non-git workspace bootstrap.
 	// When present, the Hub generates signed upload URLs instead of dispatching immediately.
@@ -317,23 +316,6 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, ErrCodeValidationError,
 				"cannot start agent: no runtime broker available", nil)
 			return
-		}
-
-		// If a task is provided, the caller has given us what we need.
-		// Otherwise, check for an existing prompt.md or attach mode.
-		if req.Task == "" {
-			hasPrompt, err := dispatcher.DispatchCheckAgentPrompt(ctx, existingAgent)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, ErrCodeValidationError,
-					fmt.Sprintf("cannot start agent without a task: failed to check prompt: %v", err), nil)
-				return
-			}
-
-			if !hasPrompt && !req.Attach {
-				writeError(w, http.StatusBadRequest, ErrCodeValidationError,
-					"cannot start agent without a task: prompt.md is empty", nil)
-				return
-			}
 		}
 
 		// Update applied config with the task if provided
@@ -499,12 +481,11 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Dispatch to runtime broker if available.
-	// When a task or attach mode is requested (and not provision-only), do a full
-	// create+start via DispatchAgentCreate. Otherwise provision only — set up dirs,
-	// worktree, templates without launching the container.
+	// Unless provision-only is requested, do a full create+start via DispatchAgentCreate.
+	// Otherwise provision only — set up dirs, worktree, templates without launching the container.
 	var warnings []string
 	if dispatcher := s.GetDispatcher(); dispatcher != nil {
-		if (req.Task != "" || req.Attach) && !req.ProvisionOnly {
+		if !req.ProvisionOnly {
 			if err := dispatcher.DispatchAgentCreate(ctx, agent); err != nil {
 				// Log the error but don't fail the request - agent is created in Hub
 				warnings = append(warnings, "Failed to dispatch to runtime broker: "+err.Error())
@@ -1673,10 +1654,8 @@ func (s *Server) createGroveAgent(w http.ResponseWriter, r *http.Request, groveI
 		return
 	}
 
-	// If no task is provided, check if the agent already exists.
-	// If it exists and has a prompt.md (or is in "created" status), start it.
-	// If it doesn't exist, allow creation (for "scion create" or "scion start -a" flows).
-	if req.Task == "" {
+	// Check if the agent already exists. If it does, start it instead of creating a new one.
+	{
 		slug := api.Slugify(req.Name)
 		existingAgent, err := s.store.GetAgentBySlug(ctx, groveID, slug)
 		if err != nil && err != store.ErrNotFound {
@@ -1685,31 +1664,15 @@ func (s *Server) createGroveAgent(w http.ResponseWriter, r *http.Request, groveI
 		}
 
 		if existingAgent != nil {
-			// Agent exists - check if it can be started
 			dispatcher := s.GetDispatcher()
 			if dispatcher == nil || existingAgent.RuntimeBrokerID == "" {
 				writeError(w, http.StatusBadRequest, ErrCodeValidationError,
-					"cannot start agent without a task: no runtime broker available to check prompt", nil)
+					"cannot start agent: no runtime broker available", nil)
 				return
 			}
 
-			// Agents in "created" status were provisioned for later start —
-			// they can be started with prompt.md or attach mode.
-			hasPrompt, err := dispatcher.DispatchCheckAgentPrompt(ctx, existingAgent)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, ErrCodeValidationError,
-					fmt.Sprintf("cannot start agent without a task: failed to check prompt: %v", err), nil)
-				return
-			}
-
-			if !hasPrompt && !req.Attach {
-				writeError(w, http.StatusBadRequest, ErrCodeValidationError,
-					"cannot start agent without a task: prompt.md is empty", nil)
-				return
-			}
-
-			// Agent exists and has a prompt (or attach requested) - dispatch start action
-			if err := dispatcher.DispatchAgentStart(ctx, existingAgent, ""); err != nil {
+			// Dispatch start action
+			if err := dispatcher.DispatchAgentStart(ctx, existingAgent, req.Task); err != nil {
 				RuntimeError(w, "Failed to start agent: "+err.Error())
 				return
 			}
@@ -1717,11 +1680,9 @@ func (s *Server) createGroveAgent(w http.ResponseWriter, r *http.Request, groveI
 			// Update agent status
 			existingAgent.Status = store.AgentStatusRunning
 			if err := s.store.UpdateAgent(ctx, existingAgent); err != nil {
-				// Log but continue - agent was started
 				slog.Warn("Failed to update agent status after start", "error", err)
 			}
 
-			// Enrich and return the existing agent
 			s.enrichAgent(ctx, existingAgent, grove, nil)
 			writeJSON(w, http.StatusOK, CreateAgentResponse{
 				Agent: existingAgent,
@@ -1729,7 +1690,6 @@ func (s *Server) createGroveAgent(w http.ResponseWriter, r *http.Request, groveI
 			return
 		}
 		// Agent doesn't exist - fall through to create it
-		// (supports "scion create" and "scion start -a" flows)
 	}
 
 	// Resolve template if specified - the client may pass either a template ID or name
@@ -1807,11 +1767,11 @@ func (s *Server) createGroveAgent(w http.ResponseWriter, r *http.Request, groveI
 	}
 
 	// Dispatch to runtime broker if available.
-	// With a task or attach: full create+start (DispatchAgentCreate).
-	// Without task/attach: provision-only (DispatchAgentProvision).
+	// Unless provision-only is requested, do a full create+start via DispatchAgentCreate.
+	// Otherwise provision only — set up dirs, worktree, templates without launching the container.
 	var warnings []string
 	if dispatcher := s.GetDispatcher(); dispatcher != nil {
-		if req.Task != "" || req.Attach {
+		if !req.ProvisionOnly {
 			if err := dispatcher.DispatchAgentCreate(ctx, agent); err != nil {
 				// Log the error but don't fail the request - agent is created in Hub
 				warnings = append(warnings, "Failed to dispatch to runtime broker: "+err.Error())

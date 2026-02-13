@@ -419,7 +419,7 @@ func TestAgentCreate_NoTaskViaGrove(t *testing.T) {
 }
 
 // TestAgentCreate_AttachNoTask tests that creating an agent with attach=true but no task
-// succeeds. The attach flag signals that the agent should be dispatched for interactive use.
+// succeeds. Tasks are always optional; attach signals interactive mode to the harness.
 func TestAgentCreate_AttachNoTask(t *testing.T) {
 	srv, s := testServer(t)
 	ctx := context.Background()

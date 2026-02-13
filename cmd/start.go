@@ -23,12 +23,12 @@ var startCmd = &cobra.Command{
 	Use:     "start <agent-name> [task...]",
 	Aliases: []string{"run"},
 	Short:   "Launch a new scion agent",
-	Long: `Provision and launch a new isolated LLM agent to perform a specific task.
+	Long: `Provision and launch a new isolated LLM agent.
 The agent will be created from a template and run in a detached container.
 
-The agent-name is required as the first argument. All subsequent arguments 
-form the task prompt. If no task arguments are provided, the agent will 
-look for a prompt.md file in its root directory.`,
+The agent-name is required as the first argument. All subsequent arguments
+form the task prompt. The task is optional — if none is given, the agent
+starts interactively or uses its template's built-in prompt.`,
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: getAgentNames,
 	RunE: func(cmd *cobra.Command, args []string) error {

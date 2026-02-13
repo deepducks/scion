@@ -22,12 +22,13 @@ import (
 var resumeCmd = &cobra.Command{
 	Use:   "resume <agent-name>",
 	Short: "Resume a stopped scion agent",
-	Long: `Resume an existing stopped LLM agent. 
-The agent will be re-launched with the harness-specific resume flag, 
+	Long: `Resume an existing stopped LLM agent.
+The agent will be re-launched with the harness-specific resume flag,
 preserving its previous state.
 
-The agent-name is required as the first argument. All subsequent arguments
-form the task prompt to be added to the resumed session (if supported by the harness).`,
+The agent-name is required as the first argument. Subsequent arguments
+are optional and form a task prompt to be added to the resumed session
+(if supported by the harness).`,
 	Args:              cobra.MinimumNArgs(1),
 	ValidArgsFunction: getAgentNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
