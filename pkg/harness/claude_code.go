@@ -18,6 +18,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,4 +189,20 @@ func (c *ClaudeCode) GetInterruptKey() string {
 
 func (c *ClaudeCode) GetHarnessEmbedsFS() (embed.FS, string) {
 	return claudeEmbeds.EmbedsFS, "embeds"
+}
+
+func (c *ClaudeCode) InjectAgentInstructions(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, ".claude", "claude.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for agent instructions: %w", err)
+	}
+	return os.WriteFile(target, content, 0644)
+}
+
+func (c *ClaudeCode) InjectSystemPrompt(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, ".claude", "CLAUDE.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for system prompt: %w", err)
+	}
+	return os.WriteFile(target, content, 0644)
 }

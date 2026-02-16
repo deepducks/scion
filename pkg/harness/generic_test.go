@@ -16,6 +16,7 @@ package harness
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -94,5 +95,43 @@ func TestGeneric_DefaultConfigDir(t *testing.T) {
 	g := &Generic{}
 	if g.DefaultConfigDir() != ".scion" {
 		t.Errorf("Expected DefaultConfigDir '.scion', got '%s'", g.DefaultConfigDir())
+	}
+}
+
+func TestGenericInjectAgentInstructions(t *testing.T) {
+	agentHome := t.TempDir()
+	g := &Generic{}
+	content := []byte("# Agent Instructions\nDo good work.")
+
+	if err := g.InjectAgentInstructions(agentHome, content); err != nil {
+		t.Fatalf("InjectAgentInstructions failed: %v", err)
+	}
+
+	target := filepath.Join(agentHome, "agents.md")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("expected file at %s: %v", target, err)
+	}
+	if string(data) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", string(data), string(content))
+	}
+}
+
+func TestGenericInjectSystemPrompt(t *testing.T) {
+	agentHome := t.TempDir()
+	g := &Generic{}
+	content := []byte("You are a helpful coding assistant.")
+
+	if err := g.InjectSystemPrompt(agentHome, content); err != nil {
+		t.Fatalf("InjectSystemPrompt failed: %v", err)
+	}
+
+	target := filepath.Join(agentHome, ".scion", "system_prompt.md")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("expected file at %s: %v", target, err)
+	}
+	if string(data) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", string(data), string(content))
 	}
 }

@@ -47,4 +47,13 @@ type Harness interface {
 	// GetHarnessEmbedsFS returns the embedded filesystem containing default harness-config files
 	// and the base path within it (e.g., "embeds").
 	GetHarnessEmbedsFS() (embed.FS, string)
+
+	// InjectAgentInstructions places agent instructions content into the harness's
+	// expected location within the agent home directory.
+	InjectAgentInstructions(agentHome string, content []byte) error
+
+	// InjectSystemPrompt delivers system prompt content. Harnesses with native system
+	// prompt support write to their expected location. Harnesses without it merge the
+	// content into agent instructions (downgrade).
+	InjectSystemPrompt(agentHome string, content []byte) error
 }

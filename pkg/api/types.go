@@ -188,6 +188,11 @@ type ScionConfig struct {
 	MaxTurns    int               `json:"max_turns,omitempty" yaml:"max_turns,omitempty"`
 	MaxDuration string            `json:"max_duration,omitempty" yaml:"max_duration,omitempty"`
 
+	// Agnostic template fields (Phase 2)
+	AgentInstructions  string `json:"agent_instructions,omitempty" yaml:"agent_instructions,omitempty"`
+	SystemPrompt       string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
+	DefaultHarnessConfig string `json:"default_harness_config,omitempty" yaml:"default_harness_config,omitempty"`
+
 	// Info contains persisted metadata about the agent
 	Info *AgentInfo `json:"-" yaml:"-"`
 }

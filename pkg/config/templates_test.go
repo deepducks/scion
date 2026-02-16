@@ -697,3 +697,82 @@ func TestMergeScionConfigServices(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateAgnosticTemplate_RejectsHarnessField(t *testing.T) {
+	cfg := &api.ScionConfig{Harness: "claude"}
+	err := ValidateAgnosticTemplate(cfg)
+	if err == nil {
+		t.Fatal("expected error when harness field is set, got nil")
+	}
+	if !strings.Contains(err.Error(), "'harness' field is no longer supported") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestValidateAgnosticTemplate_ValidTemplate(t *testing.T) {
+	cfg := &api.ScionConfig{
+		DefaultHarnessConfig: "gemini",
+		AgentInstructions:    "agents.md",
+		SystemPrompt:         "system-prompt.md",
+	}
+	err := ValidateAgnosticTemplate(cfg)
+	if err != nil {
+		t.Fatalf("expected no error for valid agnostic template, got: %v", err)
+	}
+}
+
+func TestMergeScionConfig_NewFields(t *testing.T) {
+	t.Run("agent_instructions override replaces base", func(t *testing.T) {
+		base := &api.ScionConfig{AgentInstructions: "base-agents.md"}
+		override := &api.ScionConfig{AgentInstructions: "override-agents.md"}
+		got := MergeScionConfig(base, override)
+		if got.AgentInstructions != "override-agents.md" {
+			t.Errorf("expected AgentInstructions='override-agents.md', got %q", got.AgentInstructions)
+		}
+	})
+
+	t.Run("agent_instructions empty override keeps base", func(t *testing.T) {
+		base := &api.ScionConfig{AgentInstructions: "base-agents.md"}
+		override := &api.ScionConfig{}
+		got := MergeScionConfig(base, override)
+		if got.AgentInstructions != "base-agents.md" {
+			t.Errorf("expected AgentInstructions='base-agents.md', got %q", got.AgentInstructions)
+		}
+	})
+
+	t.Run("system_prompt override replaces base", func(t *testing.T) {
+		base := &api.ScionConfig{SystemPrompt: "base-prompt.md"}
+		override := &api.ScionConfig{SystemPrompt: "override-prompt.md"}
+		got := MergeScionConfig(base, override)
+		if got.SystemPrompt != "override-prompt.md" {
+			t.Errorf("expected SystemPrompt='override-prompt.md', got %q", got.SystemPrompt)
+		}
+	})
+
+	t.Run("system_prompt empty override keeps base", func(t *testing.T) {
+		base := &api.ScionConfig{SystemPrompt: "base-prompt.md"}
+		override := &api.ScionConfig{}
+		got := MergeScionConfig(base, override)
+		if got.SystemPrompt != "base-prompt.md" {
+			t.Errorf("expected SystemPrompt='base-prompt.md', got %q", got.SystemPrompt)
+		}
+	})
+
+	t.Run("default_harness_config override replaces base", func(t *testing.T) {
+		base := &api.ScionConfig{DefaultHarnessConfig: "gemini"}
+		override := &api.ScionConfig{DefaultHarnessConfig: "claude"}
+		got := MergeScionConfig(base, override)
+		if got.DefaultHarnessConfig != "claude" {
+			t.Errorf("expected DefaultHarnessConfig='claude', got %q", got.DefaultHarnessConfig)
+		}
+	})
+
+	t.Run("default_harness_config empty override keeps base", func(t *testing.T) {
+		base := &api.ScionConfig{DefaultHarnessConfig: "gemini"}
+		override := &api.ScionConfig{}
+		got := MergeScionConfig(base, override)
+		if got.DefaultHarnessConfig != "gemini" {
+			t.Errorf("expected DefaultHarnessConfig='gemini', got %q", got.DefaultHarnessConfig)
+		}
+	})
+}

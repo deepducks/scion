@@ -1,0 +1,6 @@
+schema_version: "1"
+name: default
+description: "Default scion agent template"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+default_harness_config: gemini

@@ -473,6 +473,16 @@ func ListTemplates() ([]*Template, error) {
 	return list, nil
 }
 
+// ValidateAgnosticTemplate validates that a ScionConfig is a valid agnostic template.
+// It rejects templates that still use the legacy 'harness' field and validates
+// that agnostic template fields are properly configured.
+func ValidateAgnosticTemplate(cfg *api.ScionConfig) error {
+	if cfg.Harness != "" {
+		return fmt.Errorf("invalid template: 'harness' field is no longer supported in scion-agent.yaml. Remove it and use --harness-config to specify the harness")
+	}
+	return nil
+}
+
 func MergeScionConfig(base, override *api.ScionConfig) *api.ScionConfig {
 	if base == nil {
 		base = &api.ScionConfig{}
@@ -557,6 +567,15 @@ func MergeScionConfig(base, override *api.ScionConfig) *api.ScionConfig {
 	}
 	if override.MaxDuration != "" {
 		result.MaxDuration = override.MaxDuration
+	}
+	if override.AgentInstructions != "" {
+		result.AgentInstructions = override.AgentInstructions
+	}
+	if override.SystemPrompt != "" {
+		result.SystemPrompt = override.SystemPrompt
+	}
+	if override.DefaultHarnessConfig != "" {
+		result.DefaultHarnessConfig = override.DefaultHarnessConfig
 	}
 	if override.Info != nil {
 		if result.Info == nil {

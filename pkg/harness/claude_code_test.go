@@ -114,3 +114,41 @@ func TestClaudeCode_Provision(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeInjectAgentInstructions(t *testing.T) {
+	agentHome := t.TempDir()
+	c := &ClaudeCode{}
+	content := []byte("# Agent Instructions\nDo good work.")
+
+	if err := c.InjectAgentInstructions(agentHome, content); err != nil {
+		t.Fatalf("InjectAgentInstructions failed: %v", err)
+	}
+
+	target := filepath.Join(agentHome, ".claude", "claude.md")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("expected file at %s: %v", target, err)
+	}
+	if string(data) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", string(data), string(content))
+	}
+}
+
+func TestClaudeInjectSystemPrompt(t *testing.T) {
+	agentHome := t.TempDir()
+	c := &ClaudeCode{}
+	content := []byte("You are a helpful coding assistant.")
+
+	if err := c.InjectSystemPrompt(agentHome, content); err != nil {
+		t.Fatalf("InjectSystemPrompt failed: %v", err)
+	}
+
+	target := filepath.Join(agentHome, ".claude", "CLAUDE.md")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("expected file at %s: %v", target, err)
+	}
+	if string(data) != string(content) {
+		t.Errorf("content mismatch: got %q, want %q", string(data), string(content))
+	}
+}

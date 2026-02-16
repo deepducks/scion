@@ -182,3 +182,16 @@ func (g *Generic) GetInterruptKey() string {
 func (g *Generic) GetHarnessEmbedsFS() (embed.FS, string) {
 	return embed.FS{}, ""
 }
+
+func (g *Generic) InjectAgentInstructions(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, "agents.md")
+	return os.WriteFile(target, content, 0644)
+}
+
+func (g *Generic) InjectSystemPrompt(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, ".scion", "system_prompt.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for system prompt: %w", err)
+	}
+	return os.WriteFile(target, content, 0644)
+}

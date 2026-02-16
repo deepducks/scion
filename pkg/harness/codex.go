@@ -145,3 +145,25 @@ func (c *Codex) GetInterruptKey() string {
 func (c *Codex) GetHarnessEmbedsFS() (embed.FS, string) {
 	return codexEmbeds.EmbedsFS, "embeds"
 }
+
+func (c *Codex) InjectAgentInstructions(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, "AGENTS.md")
+	return os.WriteFile(target, content, 0644)
+}
+
+func (c *Codex) InjectSystemPrompt(agentHome string, content []byte) error {
+	// Codex has no native system prompt support — downgrade by prepending to AGENTS.md
+	agentsPath := filepath.Join(agentHome, "AGENTS.md")
+	header := fmt.Sprintf("# System Prompt\n\n%s\n\n---\n\n", string(content))
+
+	existing, err := os.ReadFile(agentsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read existing agent instructions: %w", err)
+	}
+
+	merged := []byte(header)
+	if len(existing) > 0 {
+		merged = append(merged, existing...)
+	}
+	return os.WriteFile(agentsPath, merged, 0644)
+}

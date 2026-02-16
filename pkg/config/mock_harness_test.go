@@ -88,6 +88,17 @@ func (m *MockHarness) Provision(ctx context.Context, agentName, agentHome, agent
 func (m *MockHarness) GetEmbedDir() string                    { return m.EmbedDirVal }
 func (m *MockHarness) GetInterruptKey() string                { return "C-c" }
 func (m *MockHarness) GetHarnessEmbedsFS() (embed.FS, string) { return embed.FS{}, "" }
+func (m *MockHarness) InjectAgentInstructions(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, "agents.md")
+	return os.WriteFile(target, content, 0644)
+}
+func (m *MockHarness) InjectSystemPrompt(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, ".scion", "system_prompt.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(target, content, 0644)
+}
 
 func GetMockHarnesses() []api.Harness {
 	return []api.Harness{

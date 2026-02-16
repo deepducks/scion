@@ -412,3 +412,19 @@ func (g *GeminiCLI) GetInterruptKey() string {
 func (g *GeminiCLI) GetHarnessEmbedsFS() (embed.FS, string) {
 	return geminiEmbeds.EmbedsFS, "embeds"
 }
+
+func (g *GeminiCLI) InjectAgentInstructions(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, ".gemini", "gemini.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for agent instructions: %w", err)
+	}
+	return os.WriteFile(target, content, 0644)
+}
+
+func (g *GeminiCLI) InjectSystemPrompt(agentHome string, content []byte) error {
+	target := filepath.Join(agentHome, ".gemini", "system_prompt.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for system prompt: %w", err)
+	}
+	return os.WriteFile(target, content, 0644)
+}

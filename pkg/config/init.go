@@ -227,6 +227,45 @@ func GetEnclosingGrovePath() (grovePath string, rootDir string, found bool) {
 	return "", "", false
 }
 
+// SeedAgnosticTemplate seeds the default agnostic template from embedded files.
+// It copies scion-agent.yaml, agents.md, and system-prompt.md into the target directory.
+func SeedAgnosticTemplate(targetDir string, force bool) error {
+	templateBase := "embeds/templates/default"
+
+	entries, err := EmbedsFS.ReadDir(templateBase)
+	if err != nil {
+		return fmt.Errorf("failed to read embedded template directory: %w", err)
+	}
+
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("failed to create template directory %s: %w", targetDir, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		data, err := EmbedsFS.ReadFile(filepath.Join(templateBase, entry.Name()))
+		if err != nil {
+			return fmt.Errorf("failed to read embedded file %s: %w", entry.Name(), err)
+		}
+
+		targetPath := filepath.Join(targetDir, entry.Name())
+		if !force {
+			if _, err := os.Stat(targetPath); err == nil {
+				continue // File exists and force is false, skip
+			}
+		}
+
+		if err := os.WriteFile(targetPath, data, 0644); err != nil {
+			return fmt.Errorf("failed to write file %s: %w", targetPath, err)
+		}
+	}
+
+	return nil
+}
+
 func InitProject(targetDir string, harnesses []api.Harness) error {
 	var projectDir string
 	var err error
@@ -268,6 +307,11 @@ func InitProject(targetDir string, harnesses []api.Harness) error {
 
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create agents directory: %w", err)
+	}
+
+	// Seed default agnostic template
+	if err := SeedAgnosticTemplate(filepath.Join(templatesDir, "default"), false); err != nil {
+		return fmt.Errorf("failed to seed default agnostic template: %w", err)
 	}
 
 	for _, h := range harnesses {
@@ -318,6 +362,11 @@ func InitGlobal(harnesses []api.Harness) error {
 
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create global agents directory: %w", err)
+	}
+
+	// Seed default agnostic template
+	if err := SeedAgnosticTemplate(filepath.Join(templatesDir, "default"), false); err != nil {
+		return fmt.Errorf("failed to seed global default agnostic template: %w", err)
 	}
 
 	for _, h := range harnesses {

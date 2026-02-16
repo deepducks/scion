@@ -208,3 +208,102 @@ func TestGetEnclosingGrovePath_NotFound(t *testing.T) {
 		t.Error("expected found=false when no enclosing grove")
 	}
 }
+
+func TestSeedAgnosticTemplate(t *testing.T) {
+	targetDir := filepath.Join(t.TempDir(), "default")
+
+	if err := SeedAgnosticTemplate(targetDir, false); err != nil {
+		t.Fatalf("SeedAgnosticTemplate failed: %v", err)
+	}
+
+	// Verify all expected files exist
+	expectedFiles := []string{"scion-agent.yaml", "agents.md", "system-prompt.md"}
+	for _, f := range expectedFiles {
+		path := filepath.Join(targetDir, f)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("expected file %s to exist", f)
+		}
+	}
+
+	// Verify scion-agent.yaml has no harness field and has default_harness_config
+	data, err := os.ReadFile(filepath.Join(targetDir, "scion-agent.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if strings.Contains(content, "harness: claude") || strings.Contains(content, "harness: gemini") {
+		t.Error("agnostic template should not contain harness-specific field")
+	}
+	if !strings.Contains(content, "default_harness_config:") {
+		t.Error("agnostic template should contain default_harness_config field")
+	}
+}
+
+func TestSeedAgnosticTemplate_NoOverwrite(t *testing.T) {
+	targetDir := filepath.Join(t.TempDir(), "default")
+	os.MkdirAll(targetDir, 0755)
+
+	// Write a custom file first
+	customContent := "custom content"
+	os.WriteFile(filepath.Join(targetDir, "agents.md"), []byte(customContent), 0644)
+
+	// Seed without force — should not overwrite
+	if err := SeedAgnosticTemplate(targetDir, false); err != nil {
+		t.Fatalf("SeedAgnosticTemplate failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(targetDir, "agents.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != customContent {
+		t.Error("SeedAgnosticTemplate overwrote existing file when force=false")
+	}
+}
+
+func TestSeedAgnosticTemplate_ForceOverwrite(t *testing.T) {
+	targetDir := filepath.Join(t.TempDir(), "default")
+	os.MkdirAll(targetDir, 0755)
+
+	// Write a custom file first
+	os.WriteFile(filepath.Join(targetDir, "agents.md"), []byte("custom"), 0644)
+
+	// Seed with force — should overwrite
+	if err := SeedAgnosticTemplate(targetDir, true); err != nil {
+		t.Fatalf("SeedAgnosticTemplate failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(targetDir, "agents.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) == "custom" {
+		t.Error("SeedAgnosticTemplate did not overwrite existing file when force=true")
+	}
+}
+
+func TestInitProject_SeedsAgnosticTemplate(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Override HOME for global templates
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", origHome)
+
+	// Use explicit targetDir to avoid CWD-based resolution issues
+	projectDir := filepath.Join(tmpDir, "project", DotScion)
+
+	if err := InitProject(projectDir, GetMockHarnesses()); err != nil {
+		t.Fatalf("InitProject failed: %v", err)
+	}
+
+	// Verify default agnostic template was created
+	defaultTplDir := filepath.Join(projectDir, "templates", "default")
+	expectedFiles := []string{"scion-agent.yaml", "agents.md", "system-prompt.md"}
+	for _, f := range expectedFiles {
+		path := filepath.Join(defaultTplDir, f)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("expected default template file %s to exist at %s", f, path)
+		}
+	}
+}
