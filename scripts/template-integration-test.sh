@@ -56,6 +56,14 @@ USE_GCS=false
 VERBOSE=false
 STORAGE_BUCKET=""
 
+# Cross-platform file size function (stat -c%s is Linux-only, macOS uses -f%s)
+file_size() {
+    if stat -c%s "$1" 2>/dev/null; then
+        return
+    fi
+    stat -f%s "$1"
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -509,12 +517,12 @@ test_phase2_upload_flow() {
             \"manifest\": {
                 \"version\": \"1.0\",
                 \"files\": [
-                    {\"path\": \"scion-agent.yaml\", \"hash\": \"sha256:$yaml_hash\", \"size\": $(stat -c%s "$template_dir/scion-agent.yaml"), \"mode\": \"0644\"},
-                    {\"path\": \"agents.md\", \"hash\": \"sha256:$agents_hash\", \"size\": $(stat -c%s "$template_dir/agents.md"), \"mode\": \"0644\"},
-                    {\"path\": \"system-prompt.md\", \"hash\": \"sha256:$prompt_hash\", \"size\": $(stat -c%s "$template_dir/system-prompt.md"), \"mode\": \"0644\"},
-                    {\"path\": \"home/.bashrc\", \"hash\": \"sha256:$bashrc_hash\", \"size\": $(stat -c%s "$template_dir/home/.bashrc"), \"mode\": \"0644\"},
-                    {\"path\": \"home/.config/lint-rules/rules.yaml\", \"hash\": \"sha256:$lint_hash\", \"size\": $(stat -c%s "$template_dir/home/.config/lint-rules/rules.yaml"), \"mode\": \"0644\"},
-                    {\"path\": \"harness-configs/claude/config.yaml\", \"hash\": \"sha256:$hconfig_hash\", \"size\": $(stat -c%s "$template_dir/harness-configs/claude/config.yaml"), \"mode\": \"0644\"}
+                    {\"path\": \"scion-agent.yaml\", \"hash\": \"sha256:$yaml_hash\", \"size\": $(file_size "$template_dir/scion-agent.yaml"), \"mode\": \"0644\"},
+                    {\"path\": \"agents.md\", \"hash\": \"sha256:$agents_hash\", \"size\": $(file_size "$template_dir/agents.md"), \"mode\": \"0644\"},
+                    {\"path\": \"system-prompt.md\", \"hash\": \"sha256:$prompt_hash\", \"size\": $(file_size "$template_dir/system-prompt.md"), \"mode\": \"0644\"},
+                    {\"path\": \"home/.bashrc\", \"hash\": \"sha256:$bashrc_hash\", \"size\": $(file_size "$template_dir/home/.bashrc"), \"mode\": \"0644\"},
+                    {\"path\": \"home/.config/lint-rules/rules.yaml\", \"hash\": \"sha256:$lint_hash\", \"size\": $(file_size "$template_dir/home/.config/lint-rules/rules.yaml"), \"mode\": \"0644\"},
+                    {\"path\": \"harness-configs/claude/config.yaml\", \"hash\": \"sha256:$hconfig_hash\", \"size\": $(file_size "$template_dir/harness-configs/claude/config.yaml"), \"mode\": \"0644\"}
                 ]
             }
         }")

@@ -471,6 +471,11 @@ func detectHarnessType(tpl *config.Template) (string, error) {
 		return cfg.Harness, nil
 	}
 
+	// For harness-agnostic templates, fall back to default_harness_config
+	if cfg.DefaultHarnessConfig != "" {
+		return cfg.DefaultHarnessConfig, nil
+	}
+
 	// Try to infer from template name
 	name := strings.ToLower(tpl.Name)
 	switch {

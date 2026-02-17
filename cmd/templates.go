@@ -731,7 +731,7 @@ func runTemplateSync(cmd *cobra.Command, args []string) error {
 	harnessType, err := detectHarnessType(tpl)
 	if err != nil {
 		return fmt.Errorf("failed to detect harness type: %w\n\n"+
-			"Ensure the template has a valid scion-agent.json with a 'harness' field", err)
+			"Ensure the template has a valid scion-agent.yaml with a 'harness' or 'default_harness_config' field", err)
 	}
 
 	return syncTemplateToHub(hubCtx, hubName, tpl.Path, destScope, harnessType)
