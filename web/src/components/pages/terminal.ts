@@ -160,6 +160,7 @@ export class ScionPageTerminal extends LitElement {
 
     .terminal-container {
       flex: 1;
+      position: relative;
       overflow: hidden;
     }
 
@@ -335,6 +336,10 @@ export class ScionPageTerminal extends LitElement {
     this.shadowRoot?.appendChild(xtermStyle);
 
     this.terminal.open(container);
+
+    // Defer initial fit until browser has completed layout so the container
+    // has its final dimensions (below the toolbar).
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     this.fitAddon.fit();
 
     // Handle terminal input
@@ -369,6 +374,11 @@ export class ScionPageTerminal extends LitElement {
       console.debug('[Terminal] WebSocket connected');
       this.connected = true;
       this.error = null;
+      // Re-fit now that the connection is live so tmux gets accurate dimensions
+      if (this.fitAddon) {
+        this.fitAddon.fit();
+        this.sendResize();
+      }
       this.terminal?.focus();
     };
 
@@ -426,9 +436,21 @@ export class ScionPageTerminal extends LitElement {
     this.socket.send(JSON.stringify(msg));
   }
 
+  /**
+   * Sends a tmux detach sequence (Ctrl-B d) so the tmux client exits cleanly
+   * instead of being killed, which would tear down the container.
+   */
+  private sendTmuxDetach(): void {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      // tmux default prefix is Ctrl-B (0x02), detach key is 'd'
+      this.sendData('\x02d');
+    }
+  }
+
   private cleanup(): void {
+    this.sendTmuxDetach();
     if (this.socket) {
-      this.socket.close();
+      this.socket.close(1000, 'detach');
       this.socket = null;
     }
     if (this.terminal) {
@@ -440,6 +462,12 @@ export class ScionPageTerminal extends LitElement {
       this.resizeObserver = null;
     }
     this.fitAddon = null;
+  }
+
+  private handleBackToAgent(e: Event): void {
+    e.preventDefault();
+    this.cleanup();
+    window.location.href = `/agents/${this.agentId}`;
   }
 
   private handleReconnect(): void {
@@ -485,7 +513,7 @@ export class ScionPageTerminal extends LitElement {
 
     return html`
       <div class="toolbar">
-        <a href="/agents/${this.agentId}" class="back-link">
+        <a href="/agents/${this.agentId}" class="back-link" @click=${(e: Event) => this.handleBackToAgent(e)}>
           &larr; Back to Agent
         </a>
         <div class="separator"></div>
