@@ -12,7 +12,10 @@ TEST_GEMINI_KEY
 
 # web frontend
 web/node_modules/
-web/dist/
+web/dist/*
+!web/dist/client
+web/dist/client/*
+!web/dist/client/.gitkeep
 web/public/assets/
 
 # docs site

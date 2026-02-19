@@ -80,6 +80,11 @@ var (
 
 	// Admin emails for bootstrapping - comma-separated list
 	adminEmails string
+
+	// Web frontend flags
+	enableWeb    bool
+	webPort      int
+	webAssetsDir string
 )
 
 // serverCmd represents the server command
@@ -91,7 +96,7 @@ var serverCmd = &cobra.Command{
 The server provides:
 - Hub API: Central registry for groves, agents, and templates (port 9810)
 - Runtime Broker API: Agent lifecycle management on compute nodes (port 9800)
-- Web Frontend: Browser-based UI (coming soon, port 9820)`,
+- Web Frontend: Browser-based UI (--enable-web, port 8080)`,
 }
 
 // serverStartCmd represents the server start command
@@ -103,6 +108,7 @@ var serverStartCmd = &cobra.Command{
 Server Components:
 - Hub API (--enable-hub): Central coordination for groves, agents, templates
 - Runtime Broker API (--enable-runtime-broker): Agent lifecycle on this compute node
+- Web Frontend (--enable-web): Browser-based UI for managing agents and groves
 
 Configuration can be provided via:
 - Config file (--config flag or ~/.scion/server.yaml)
@@ -120,7 +126,13 @@ Examples:
   scion server start --enable-hub --enable-runtime-broker
 
   # Start Runtime Broker with custom port
-  scion server start --enable-runtime-broker --runtime-broker-port 9800`,
+  scion server start --enable-runtime-broker --runtime-broker-port 9800
+
+  # Start Hub with Web Frontend
+  scion server start --enable-hub --enable-web
+
+  # Start Web Frontend with custom assets directory (development)
+  scion server start --enable-hub --enable-web --web-assets-dir ./web/dist/client`,
 	RunE: runServerStart,
 }
 
@@ -295,8 +307,8 @@ func runServerStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if at least one server is enabled
-	if !enableHub && !cfg.RuntimeBroker.Enabled {
-		return fmt.Errorf("no server components enabled; use --enable-hub or --enable-runtime-broker")
+	if !enableHub && !cfg.RuntimeBroker.Enabled && !enableWeb {
+		return fmt.Errorf("no server components enabled; use --enable-hub, --enable-runtime-broker, or --enable-web")
 	}
 
 	// Check if server ports are already in use
@@ -316,6 +328,19 @@ func runServerStart(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("a scion server is already running on port %d\nUse 'scion server status' to check or 'scion server stop' to stop it", cfg.RuntimeBroker.Port)
 			}
 			return fmt.Errorf("Runtime Broker port %d is already in use by another process", cfg.RuntimeBroker.Port)
+		}
+	}
+	if enableWeb {
+		webHost := cfg.Hub.Host
+		if webHost == "" {
+			webHost = "0.0.0.0"
+		}
+		status := checkPort(webHost, webPort)
+		if status.inUse {
+			if status.isScionServer {
+				return fmt.Errorf("a scion server is already running on port %d\nUse 'scion server status' to check or 'scion server stop' to stop it", webPort)
+			}
+			return fmt.Errorf("Web Frontend port %d is already in use by another process", webPort)
 		}
 	}
 
@@ -340,7 +365,7 @@ func runServerStart(cmd *cobra.Command, args []string) error {
 	}()
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 
 	// Initialize store (needed for Hub and for global grove registration)
 	var s store.Store
@@ -584,6 +609,30 @@ func runServerStart(cmd *cobra.Command, args []string) error {
 			defer wg.Done()
 			if err := hubSrv.Start(ctx); err != nil {
 				errCh <- fmt.Errorf("hub server error: %w", err)
+			}
+		}()
+	}
+
+	// Start Web Frontend if enabled
+	if enableWeb {
+		webHost := cfg.Hub.Host
+		if webHost == "" {
+			webHost = "0.0.0.0"
+		}
+		webCfg := hub.WebServerConfig{
+			Port:      webPort,
+			Host:      webHost,
+			AssetsDir: webAssetsDir,
+			Debug:     enableDebug,
+		}
+		webSrv := hub.NewWebServer(webCfg)
+
+		log.Printf("Starting Web Frontend on %s:%d", webCfg.Host, webCfg.Port)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := webSrv.Start(ctx); err != nil {
+				errCh <- fmt.Errorf("web server error: %w", err)
 			}
 		}()
 	}
@@ -1203,6 +1252,11 @@ func init() {
 
 	// Runtime Broker auto-provide flag
 	serverStartCmd.Flags().BoolVar(&serverAutoProvide, "auto-provide", false, "Automatically add runtime broker as provider for new groves")
+
+	// Web Frontend flags
+	serverStartCmd.Flags().BoolVar(&enableWeb, "enable-web", false, "Enable the web frontend")
+	serverStartCmd.Flags().IntVar(&webPort, "web-port", 8080, "Web frontend port")
+	serverStartCmd.Flags().StringVar(&webAssetsDir, "web-assets-dir", "", "Path to client assets directory (overrides embedded)")
 
 	// Admin bootstrap flags
 	serverStartCmd.Flags().StringVar(&adminEmails, "admin-emails", "", "Comma-separated list of email addresses to auto-promote to admin role")
