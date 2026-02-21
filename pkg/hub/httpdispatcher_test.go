@@ -146,6 +146,31 @@ func (m *mockRuntimeBrokerClient) CheckAgentPrompt(ctx context.Context, brokerID
 	return false, m.returnErr
 }
 
+func (m *mockRuntimeBrokerClient) FinalizeEnv(ctx context.Context, brokerID, brokerEndpoint, agentID string, env map[string]string) (*RemoteAgentResponse, error) {
+	return &RemoteAgentResponse{
+		Agent: &RemoteAgentInfo{ID: agentID, Name: agentID, Status: "running"},
+	}, m.returnErr
+}
+
+func (m *mockRuntimeBrokerClient) CreateAgentWithGather(ctx context.Context, brokerID, brokerEndpoint string, req *RemoteCreateAgentRequest) (*RemoteAgentResponse, *RemoteEnvRequirementsResponse, error) {
+	m.createCalled = true
+	m.lastBrokerID = brokerID
+	m.lastEndpoint = brokerEndpoint
+	m.lastCreateReq = req
+	if m.returnErr != nil {
+		return nil, nil, m.returnErr
+	}
+	return &RemoteAgentResponse{
+		Agent: &RemoteAgentInfo{
+			ID:     req.ID,
+			Slug:   req.Slug,
+			Name:   req.Name,
+			Status: "running",
+		},
+		Created: true,
+	}, nil, nil
+}
+
 func TestHTTPAgentDispatcher_DispatchAgentCreate(t *testing.T) {
 	ctx := context.Background()
 	memStore := createTestStore(t)

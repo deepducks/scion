@@ -142,6 +142,12 @@ func (d *mockDispatcher) DispatchAgentMessage(_ context.Context, _ *store.Agent,
 func (d *mockDispatcher) DispatchCheckAgentPrompt(_ context.Context, _ *store.Agent) (bool, error) {
 	return false, nil
 }
+func (d *mockDispatcher) DispatchAgentCreateWithGather(_ context.Context, agent *store.Agent) (*RemoteEnvRequirementsResponse, error) {
+	return nil, d.DispatchAgentCreate(context.Background(), agent)
+}
+func (d *mockDispatcher) DispatchFinalizeEnv(_ context.Context, _ *store.Agent, _ map[string]string) error {
+	return nil
+}
 
 // testBootstrapServer creates a test server with storage and dispatcher configured.
 func testBootstrapServer(t *testing.T) (*Server, store.Store, *mockStorage, *mockDispatcher) {

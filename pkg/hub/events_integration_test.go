@@ -50,6 +50,13 @@ func (noopDispatcher) DispatchAgentMessage(_ context.Context, _ *store.Agent, _ 
 func (noopDispatcher) DispatchCheckAgentPrompt(_ context.Context, _ *store.Agent) (bool, error) {
 	return false, nil
 }
+func (noopDispatcher) DispatchAgentCreateWithGather(_ context.Context, agent *store.Agent) (*RemoteEnvRequirementsResponse, error) {
+	agent.Status = store.AgentStatusRunning
+	return nil, nil
+}
+func (noopDispatcher) DispatchFinalizeEnv(_ context.Context, _ *store.Agent, _ map[string]string) error {
+	return nil
+}
 
 // setupEventTestServer creates a test server with an event publisher, grove, broker, and dispatcher.
 func setupEventTestServer(t *testing.T) (*Server, store.Store, *ChannelEventPublisher, *store.Grove) {

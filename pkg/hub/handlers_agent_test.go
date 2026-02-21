@@ -647,6 +647,12 @@ func (d *createAgentDispatcher) DispatchAgentMessage(_ context.Context, _ *store
 func (d *createAgentDispatcher) DispatchCheckAgentPrompt(_ context.Context, _ *store.Agent) (bool, error) {
 	return false, nil
 }
+func (d *createAgentDispatcher) DispatchAgentCreateWithGather(_ context.Context, agent *store.Agent) (*RemoteEnvRequirementsResponse, error) {
+	return nil, d.DispatchAgentCreate(context.Background(), agent)
+}
+func (d *createAgentDispatcher) DispatchFinalizeEnv(_ context.Context, _ *store.Agent, _ map[string]string) error {
+	return nil
+}
 
 // setupCreateAgentServer creates a test server with a dispatcher and a grove+broker ready for agent creation.
 func setupCreateAgentServer(t *testing.T, disp AgentDispatcher) (*Server, store.Store, *store.Grove) {
