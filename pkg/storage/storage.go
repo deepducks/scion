@@ -221,6 +221,27 @@ func TemplateStorageURI(bucket, scope, scopeID, templateSlug string) string {
 	return "gs://" + bucket + "/" + path + "/"
 }
 
+// HarnessConfigStoragePath returns the storage path for a harness config.
+// Harness configs are stored under the /harness-configs prefix with scope-based organization.
+func HarnessConfigStoragePath(scope, scopeID, slug string) string {
+	switch scope {
+	case "global":
+		return "harness-configs/global/" + slug
+	case "grove":
+		return "harness-configs/groves/" + scopeID + "/" + slug
+	case "user":
+		return "harness-configs/users/" + scopeID + "/" + slug
+	default:
+		return "harness-configs/" + slug
+	}
+}
+
+// HarnessConfigStorageURI returns the full storage URI for a harness config.
+func HarnessConfigStorageURI(bucket, scope, scopeID, slug string) string {
+	path := HarnessConfigStoragePath(scope, scopeID, slug)
+	return "gs://" + bucket + "/" + path + "/"
+}
+
 // WorkspaceStoragePath returns the storage path for an agent's workspace.
 // Workspaces are stored under /workspaces/{groveId}/{agentId}/.
 func WorkspaceStoragePath(groveID, agentID string) string {

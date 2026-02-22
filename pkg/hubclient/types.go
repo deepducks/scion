@@ -283,3 +283,40 @@ type Secret struct {
 	CreatedBy   string    `json:"createdBy,omitempty"`
 	UpdatedBy   string    `json:"updatedBy,omitempty"`
 }
+
+// HarnessConfig represents a harness config from the Hub API.
+type HarnessConfig struct {
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	DisplayName   string             `json:"displayName,omitempty"`
+	Description   string             `json:"description,omitempty"`
+	Harness       string             `json:"harness"`
+	ContentHash   string             `json:"contentHash,omitempty"`
+	Config        *HarnessConfigData `json:"config,omitempty"`
+	Scope         string             `json:"scope"`
+	ScopeID       string             `json:"scopeId,omitempty"`
+	StorageURI    string             `json:"storageUri,omitempty"`
+	StorageBucket string             `json:"storageBucket,omitempty"`
+	StoragePath   string             `json:"storagePath,omitempty"`
+	Files         []TemplateFile     `json:"files,omitempty"`
+	Locked        bool               `json:"locked,omitempty"`
+	Status        string             `json:"status"`
+	OwnerID       string             `json:"ownerId,omitempty"`
+	CreatedBy     string             `json:"createdBy,omitempty"`
+	UpdatedBy     string             `json:"updatedBy,omitempty"`
+	Visibility    string             `json:"visibility,omitempty"`
+	Created       time.Time          `json:"created"`
+	Updated       time.Time          `json:"updated"`
+}
+
+// HarnessConfigData holds harness-specific configuration.
+type HarnessConfigData struct {
+	Harness          string            `json:"harness,omitempty"`
+	Image            string            `json:"image,omitempty"`
+	User             string            `json:"user,omitempty"`
+	Model            string            `json:"model,omitempty"`
+	Args             []string          `json:"args,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	AuthSelectedType string            `json:"authSelectedType,omitempty"`
+}

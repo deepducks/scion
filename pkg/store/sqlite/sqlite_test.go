@@ -625,6 +625,94 @@ func TestTemplateList(t *testing.T) {
 }
 
 // ============================================================================
+// HarnessConfig Tests
+// ============================================================================
+
+func TestHarnessConfigCRUD(t *testing.T) {
+	s := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create harness config
+	hc := &store.HarnessConfig{
+		ID:         api.NewUUID(),
+		Name:       "Claude Default",
+		Slug:       "claude-default",
+		Harness:    "claude",
+		Scope:      "global",
+		Visibility: store.VisibilityPublic,
+		Config: &store.HarnessConfigData{
+			Harness: "claude",
+			Image:   "scion-claude:latest",
+		},
+	}
+
+	err := s.CreateHarnessConfig(ctx, hc)
+	require.NoError(t, err)
+	assert.NotZero(t, hc.Created)
+
+	// Get harness config
+	retrieved, err := s.GetHarnessConfig(ctx, hc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, hc.Name, retrieved.Name)
+	assert.Equal(t, hc.Harness, retrieved.Harness)
+	assert.Equal(t, "claude", retrieved.Config.Harness)
+	assert.Equal(t, "scion-claude:latest", retrieved.Config.Image)
+
+	// Get by slug
+	retrieved, err = s.GetHarnessConfigBySlug(ctx, "claude-default", "global", "")
+	require.NoError(t, err)
+	assert.Equal(t, hc.ID, retrieved.ID)
+
+	// Update harness config
+	retrieved.Description = "Updated description"
+	err = s.UpdateHarnessConfig(ctx, retrieved)
+	require.NoError(t, err)
+
+	// Verify update
+	retrieved, err = s.GetHarnessConfig(ctx, hc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated description", retrieved.Description)
+
+	// Delete harness config
+	err = s.DeleteHarnessConfig(ctx, hc.ID)
+	require.NoError(t, err)
+
+	_, err = s.GetHarnessConfig(ctx, hc.ID)
+	assert.ErrorIs(t, err, store.ErrNotFound)
+}
+
+func TestHarnessConfigList(t *testing.T) {
+	s := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create harness configs
+	for i := 0; i < 3; i++ {
+		hc := &store.HarnessConfig{
+			ID:         api.NewUUID(),
+			Name:       "HC " + string(rune('A'+i)),
+			Slug:       "hc-" + string(rune('a'+i)),
+			Harness:    "claude",
+			Scope:      "global",
+			Visibility: store.VisibilityPublic,
+		}
+		if i == 0 {
+			hc.Harness = "gemini"
+		}
+		require.NoError(t, s.CreateHarnessConfig(ctx, hc))
+	}
+
+	// List all
+	result, err := s.ListHarnessConfigs(ctx, store.HarnessConfigFilter{}, store.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 3, result.TotalCount)
+
+	// List by harness
+	result, err = s.ListHarnessConfigs(ctx, store.HarnessConfigFilter{Harness: "gemini"}, store.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.TotalCount)
+}
+
+// ============================================================================
 // User Tests
 // ============================================================================
 

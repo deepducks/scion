@@ -255,36 +255,10 @@ func (s *Server) createTemplateV2(w http.ResponseWriter, r *http.Request) {
 
 	// Generate upload URLs if files were specified and storage is available
 	if len(req.Files) > 0 && stor != nil {
-		uploadURLs := make([]UploadURLInfo, 0, len(req.Files))
-		for _, file := range req.Files {
-			objectPath := storagePath + "/" + file.Path
-			signedURL, err := stor.GenerateSignedURL(ctx, objectPath, storage.SignedURLOptions{
-				Method:  "PUT",
-				Expires: SignedURLExpiry,
-			})
-			if err != nil {
-				// Log but continue - some URLs may fail
-				continue
-			}
-			uploadURLs = append(uploadURLs, UploadURLInfo{
-				Path:    file.Path,
-				URL:     signedURL.URL,
-				Method:  signedURL.Method,
-				Headers: signedURL.Headers,
-				Expires: signedURL.Expires,
-			})
-		}
-		response.UploadURLs = uploadURLs
-
-		// Generate manifest URL
-		manifestPath := storagePath + "/manifest.json"
-		manifestURL, err := stor.GenerateSignedURL(ctx, manifestPath, storage.SignedURLOptions{
-			Method:      "PUT",
-			Expires:     SignedURLExpiry,
-			ContentType: "application/json",
-		})
-		if err == nil {
-			response.ManifestURL = manifestURL.URL
+		uploadURLs, manifestURL, err := generateUploadURLs(ctx, stor, storagePath, req.Files)
+		if err == nil || len(uploadURLs) > 0 {
+			response.UploadURLs = uploadURLs
+			response.ManifestURL = manifestURL
 		}
 	}
 
@@ -524,51 +498,20 @@ func (s *Server) handleTemplateUpload(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 
-	// Generate upload URLs
-	uploadURLs := make([]UploadURLInfo, 0, len(req.Files))
-	var lastErr error
-	for _, file := range req.Files {
-		objectPath := template.StoragePath + "/" + file.Path
-		signedURL, err := stor.GenerateSignedURL(ctx, objectPath, storage.SignedURLOptions{
-			Method:  "PUT",
-			Expires: SignedURLExpiry,
-		})
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		uploadURLs = append(uploadURLs, UploadURLInfo{
-			Path:    file.Path,
-			URL:     signedURL.URL,
-			Method:  signedURL.Method,
-			Headers: signedURL.Headers,
-			Expires: signedURL.Expires,
-		})
+	// Generate upload URLs using shared helper
+	uploadURLs, manifestURL, err := generateUploadURLs(ctx, stor, template.StoragePath, req.Files)
+	if err != nil {
+		RuntimeError(w, "Failed to generate upload URLs: "+err.Error())
+		return
 	}
-
-	// If we couldn't generate any upload URLs, return an error
 	if len(uploadURLs) == 0 && len(req.Files) > 0 {
-		if lastErr != nil {
-			RuntimeError(w, "Failed to generate upload URLs: "+lastErr.Error())
-		} else {
-			RuntimeError(w, "Failed to generate upload URLs")
-		}
+		RuntimeError(w, "Failed to generate upload URLs")
 		return
 	}
 
-	// Generate manifest URL
-	manifestPath := template.StoragePath + "/manifest.json"
-	manifestURL, err := stor.GenerateSignedURL(ctx, manifestPath, storage.SignedURLOptions{
-		Method:      "PUT",
-		Expires:     SignedURLExpiry,
-		ContentType: "application/json",
-	})
-
 	response := UploadResponse{
-		UploadURLs: uploadURLs,
-	}
-	if err == nil {
-		response.ManifestURL = manifestURL.URL
+		UploadURLs:  uploadURLs,
+		ManifestURL: manifestURL,
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -606,18 +549,12 @@ func (s *Server) handleTemplateFinalize(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Verify files exist in storage
-	for _, file := range req.Manifest.Files {
-		objectPath := template.StoragePath + "/" + file.Path
-		exists, err := stor.Exists(ctx, objectPath)
-		if err != nil || !exists {
-			ValidationError(w, "file not found: "+file.Path, nil)
-			return
-		}
+	// Verify files exist in storage and compute content hash using shared helper
+	contentHash, err := verifyAndFinalizeFiles(ctx, stor, template.StoragePath, req.Manifest.Files)
+	if err != nil {
+		ValidationError(w, err.Error(), nil)
+		return
 	}
-
-	// Compute content hash from file hashes
-	contentHash := computeContentHash(req.Manifest.Files)
 
 	// Update template with manifest and mark as active
 	template.Files = req.Manifest.Files
@@ -658,40 +595,13 @@ func (s *Server) handleTemplateDownload(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Generate download URLs
-	downloadURLs := make([]DownloadURLInfo, 0, len(template.Files))
-	expires := time.Now().Add(SignedURLExpiry)
-
-	for _, file := range template.Files {
-		objectPath := template.StoragePath + "/" + file.Path
-		signedURL, err := stor.GenerateSignedURL(ctx, objectPath, storage.SignedURLOptions{
-			Method:  "GET",
-			Expires: SignedURLExpiry,
-		})
-		if err != nil {
-			continue
-		}
-		downloadURLs = append(downloadURLs, DownloadURLInfo{
-			Path: file.Path,
-			URL:  signedURL.URL,
-			Size: file.Size,
-			Hash: file.Hash,
-		})
-	}
-
-	// Generate manifest URL
-	manifestPath := template.StoragePath + "/manifest.json"
-	manifestURL, _ := stor.GenerateSignedURL(ctx, manifestPath, storage.SignedURLOptions{
-		Method:  "GET",
-		Expires: SignedURLExpiry,
-	})
+	// Generate download URLs using shared helper
+	downloadURLs, manifestURL, expires, _ := generateDownloadURLs(ctx, stor, template.StoragePath, template.Files)
 
 	response := DownloadResponse{
-		Files:   downloadURLs,
-		Expires: expires,
-	}
-	if manifestURL != nil {
-		response.ManifestURL = manifestURL.URL
+		Files:       downloadURLs,
+		ManifestURL: manifestURL,
+		Expires:     expires,
 	}
 
 	writeJSON(w, http.StatusOK, response)

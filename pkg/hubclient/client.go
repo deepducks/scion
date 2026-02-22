@@ -42,6 +42,9 @@ type Client interface {
 	// Templates returns the template operations interface.
 	Templates() TemplateService
 
+	// HarnessConfigs returns the harness config operations interface.
+	HarnessConfigs() HarnessConfigService
+
 	// Workspace returns the workspace sync operations interface.
 	Workspace() WorkspaceService
 
@@ -65,15 +68,16 @@ type Client interface {
 type client struct {
 	transport *apiclient.Transport
 
-	agents        *agentService
-	groves        *groveService
-	runtimeBrokers  *runtimeBrokerService
-	templates     *templateService
-	workspace     *workspaceService
-	users         *userService
-	env           *envService
-	secrets       *secretService
-	authService   *authService
+	agents         *agentService
+	groves         *groveService
+	runtimeBrokers *runtimeBrokerService
+	templates      *templateService
+	harnessConfigs *harnessConfigService
+	workspace      *workspaceService
+	users          *userService
+	env            *envService
+	secrets        *secretService
+	authService    *authService
 }
 
 // New creates a new Hub API client.
@@ -91,6 +95,7 @@ func New(baseURL string, opts ...Option) (Client, error) {
 	c.groves = &groveService{c: c}
 	c.runtimeBrokers = &runtimeBrokerService{c: c}
 	c.templates = &templateService{c: c}
+	c.harnessConfigs = &harnessConfigService{c: c}
 	c.workspace = &workspaceService{c: c}
 	c.users = &userService{c: c}
 	c.env = &envService{c: c}
@@ -123,6 +128,11 @@ func (c *client) RuntimeBrokers() RuntimeBrokerService {
 // Templates returns the template operations interface.
 func (c *client) Templates() TemplateService {
 	return c.templates
+}
+
+// HarnessConfigs returns the harness config operations interface.
+func (c *client) HarnessConfigs() HarnessConfigService {
+	return c.harnessConfigs
 }
 
 // Workspace returns the workspace sync operations interface.

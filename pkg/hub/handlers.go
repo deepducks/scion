@@ -2924,6 +2924,17 @@ type ListTemplatesResponse struct {
 	TotalCount int              `json:"totalCount"`
 }
 
+// ============================================================================
+// HarnessConfig Endpoints
+// ============================================================================
+
+// ListHarnessConfigsResponse is the response for listing harness configs.
+type ListHarnessConfigsResponse struct {
+	HarnessConfigs []store.HarnessConfig `json:"harnessConfigs"`
+	NextCursor     string                `json:"nextCursor,omitempty"`
+	TotalCount     int                   `json:"totalCount"`
+}
+
 func (s *Server) handleTemplates(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:

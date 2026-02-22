@@ -85,6 +85,7 @@ func (s *SQLiteStore) Migrate(ctx context.Context) error {
 		migrationV13,
 		migrationV14,
 		migrationV15,
+		migrationV16,
 	}
 
 	// Create migrations table if not exists
@@ -489,6 +490,39 @@ ALTER TABLE secrets ADD COLUMN secret_ref TEXT;
 const migrationV15 = `
 UPDATE agents SET status = session_status WHERE session_status IS NOT NULL AND session_status != '';
 ALTER TABLE agents DROP COLUMN session_status;
+`
+
+// Migration V16: Add harness_configs table
+const migrationV16 = `
+CREATE TABLE IF NOT EXISTS harness_configs (
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL,
+	slug TEXT NOT NULL,
+	display_name TEXT,
+	description TEXT,
+	harness TEXT NOT NULL,
+	config TEXT,
+	content_hash TEXT,
+	scope TEXT NOT NULL DEFAULT 'global',
+	scope_id TEXT,
+	storage_uri TEXT,
+	storage_bucket TEXT,
+	storage_path TEXT,
+	files TEXT,
+	locked INTEGER NOT NULL DEFAULT 0,
+	status TEXT NOT NULL DEFAULT 'active',
+	owner_id TEXT,
+	created_by TEXT,
+	updated_by TEXT,
+	visibility TEXT NOT NULL DEFAULT 'private',
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_harness_configs_slug_scope ON harness_configs(slug, scope);
+CREATE INDEX IF NOT EXISTS idx_harness_configs_harness ON harness_configs(harness);
+CREATE INDEX IF NOT EXISTS idx_harness_configs_status ON harness_configs(status);
+CREATE INDEX IF NOT EXISTS idx_harness_configs_content_hash ON harness_configs(content_hash);
+CREATE INDEX IF NOT EXISTS idx_harness_configs_scope_id ON harness_configs(scope, scope_id);
 `
 
 // Helper functions for JSON marshaling/unmarshaling
@@ -1687,6 +1721,319 @@ func (s *SQLiteStore) ListTemplates(ctx context.Context, filter store.TemplateFi
 
 	return &store.ListResult[store.Template]{
 		Items:      templates,
+		TotalCount: totalCount,
+	}, nil
+}
+
+// ============================================================================
+// HarnessConfig Operations
+// ============================================================================
+
+func (s *SQLiteStore) CreateHarnessConfig(ctx context.Context, hc *store.HarnessConfig) error {
+	now := time.Now()
+	hc.Created = now
+	hc.Updated = now
+
+	if hc.Status == "" {
+		hc.Status = store.HarnessConfigStatusActive
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO harness_configs (
+			id, name, slug, display_name, description, harness, config,
+			content_hash, scope, scope_id,
+			storage_uri, storage_bucket, storage_path, files,
+			locked, status,
+			owner_id, created_by, updated_by, visibility,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		hc.ID, hc.Name, hc.Slug, nullableString(hc.DisplayName), nullableString(hc.Description),
+		hc.Harness, marshalJSON(hc.Config),
+		nullableString(hc.ContentHash), hc.Scope, nullableString(hc.ScopeID),
+		nullableString(hc.StorageURI), nullableString(hc.StorageBucket), nullableString(hc.StoragePath), marshalJSON(hc.Files),
+		hc.Locked, hc.Status,
+		nullableString(hc.OwnerID), nullableString(hc.CreatedBy), nullableString(hc.UpdatedBy), hc.Visibility,
+		hc.Created, hc.Updated,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return store.ErrAlreadyExists
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *SQLiteStore) GetHarnessConfig(ctx context.Context, id string) (*store.HarnessConfig, error) {
+	hc := &store.HarnessConfig{}
+	var configJSON, filesJSON string
+	var displayName, description, contentHash, scopeID sql.NullString
+	var storageURI, storageBucket, storagePath sql.NullString
+	var createdBy, updatedBy, ownerID, visibility sql.NullString
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, name, slug, display_name, description, harness, config,
+			content_hash, scope, scope_id,
+			storage_uri, storage_bucket, storage_path, files,
+			locked, status,
+			owner_id, created_by, updated_by, visibility,
+			created_at, updated_at
+		FROM harness_configs WHERE id = ?
+	`, id).Scan(
+		&hc.ID, &hc.Name, &hc.Slug, &displayName, &description,
+		&hc.Harness, &configJSON,
+		&contentHash, &hc.Scope, &scopeID,
+		&storageURI, &storageBucket, &storagePath, &filesJSON,
+		&hc.Locked, &hc.Status,
+		&ownerID, &createdBy, &updatedBy, &visibility,
+		&hc.Created, &hc.Updated,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.ErrNotFound
+		}
+		return nil, err
+	}
+
+	if displayName.Valid {
+		hc.DisplayName = displayName.String
+	}
+	if description.Valid {
+		hc.Description = description.String
+	}
+	if contentHash.Valid {
+		hc.ContentHash = contentHash.String
+	}
+	if scopeID.Valid {
+		hc.ScopeID = scopeID.String
+	}
+	if storageURI.Valid {
+		hc.StorageURI = storageURI.String
+	}
+	if storageBucket.Valid {
+		hc.StorageBucket = storageBucket.String
+	}
+	if storagePath.Valid {
+		hc.StoragePath = storagePath.String
+	}
+	if ownerID.Valid {
+		hc.OwnerID = ownerID.String
+	}
+	if createdBy.Valid {
+		hc.CreatedBy = createdBy.String
+	}
+	if updatedBy.Valid {
+		hc.UpdatedBy = updatedBy.String
+	}
+	if visibility.Valid {
+		hc.Visibility = visibility.String
+	}
+	unmarshalJSON(configJSON, &hc.Config)
+	unmarshalJSON(filesJSON, &hc.Files)
+
+	return hc, nil
+}
+
+func (s *SQLiteStore) GetHarnessConfigBySlug(ctx context.Context, slug, scope, scopeID string) (*store.HarnessConfig, error) {
+	var id string
+	var err error
+
+	if scopeID != "" {
+		err = s.db.QueryRowContext(ctx, "SELECT id FROM harness_configs WHERE slug = ? AND scope = ? AND scope_id = ?", slug, scope, scopeID).Scan(&id)
+	} else {
+		err = s.db.QueryRowContext(ctx, "SELECT id FROM harness_configs WHERE slug = ? AND scope = ?", slug, scope).Scan(&id)
+	}
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.ErrNotFound
+		}
+		return nil, err
+	}
+	return s.GetHarnessConfig(ctx, id)
+}
+
+func (s *SQLiteStore) UpdateHarnessConfig(ctx context.Context, hc *store.HarnessConfig) error {
+	hc.Updated = time.Now()
+
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE harness_configs SET
+			name = ?, slug = ?, display_name = ?, description = ?,
+			harness = ?, config = ?,
+			content_hash = ?, scope = ?, scope_id = ?,
+			storage_uri = ?, storage_bucket = ?, storage_path = ?, files = ?,
+			locked = ?, status = ?,
+			owner_id = ?, updated_by = ?, visibility = ?,
+			updated_at = ?
+		WHERE id = ?
+	`,
+		hc.Name, hc.Slug, nullableString(hc.DisplayName), nullableString(hc.Description),
+		hc.Harness, marshalJSON(hc.Config),
+		nullableString(hc.ContentHash), hc.Scope, nullableString(hc.ScopeID),
+		nullableString(hc.StorageURI), nullableString(hc.StorageBucket), nullableString(hc.StoragePath), marshalJSON(hc.Files),
+		hc.Locked, hc.Status,
+		nullableString(hc.OwnerID), nullableString(hc.UpdatedBy), hc.Visibility,
+		hc.Updated,
+		hc.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteStore) DeleteHarnessConfig(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, "DELETE FROM harness_configs WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteStore) ListHarnessConfigs(ctx context.Context, filter store.HarnessConfigFilter, opts store.ListOptions) (*store.ListResult[store.HarnessConfig], error) {
+	var conditions []string
+	var args []interface{}
+
+	if filter.Name != "" {
+		conditions = append(conditions, "(name = ? OR slug = ?)")
+		args = append(args, filter.Name, filter.Name)
+	}
+	if filter.Scope != "" {
+		conditions = append(conditions, "scope = ?")
+		args = append(args, filter.Scope)
+	}
+	if filter.ScopeID != "" {
+		conditions = append(conditions, "scope_id = ?")
+		args = append(args, filter.ScopeID)
+	}
+	if filter.Harness != "" {
+		conditions = append(conditions, "harness = ?")
+		args = append(args, filter.Harness)
+	}
+	if filter.OwnerID != "" {
+		conditions = append(conditions, "owner_id = ?")
+		args = append(args, filter.OwnerID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(name LIKE ? OR description LIKE ?)")
+		searchPattern := "%" + filter.Search + "%"
+		args = append(args, searchPattern, searchPattern)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var totalCount int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM harness_configs %s", whereClause)
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, err
+	}
+
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, name, slug, display_name, description, harness, config,
+			content_hash, scope, scope_id,
+			storage_uri, storage_bucket, storage_path, files,
+			locked, status,
+			owner_id, created_by, updated_by, visibility,
+			created_at, updated_at
+		FROM harness_configs %s ORDER BY created_at DESC LIMIT ?
+	`, whereClause)
+	args = append(args, limit)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var harnessConfigs []store.HarnessConfig
+	for rows.Next() {
+		var hc store.HarnessConfig
+		var configJSON, filesJSON string
+		var displayName, description, contentHash, scopeID sql.NullString
+		var storageURI, storageBucket, storagePath sql.NullString
+		var createdBy, updatedBy, ownerID, visibility sql.NullString
+
+		if err := rows.Scan(
+			&hc.ID, &hc.Name, &hc.Slug, &displayName, &description,
+			&hc.Harness, &configJSON,
+			&contentHash, &hc.Scope, &scopeID,
+			&storageURI, &storageBucket, &storagePath, &filesJSON,
+			&hc.Locked, &hc.Status,
+			&ownerID, &createdBy, &updatedBy, &visibility,
+			&hc.Created, &hc.Updated,
+		); err != nil {
+			return nil, err
+		}
+
+		if displayName.Valid {
+			hc.DisplayName = displayName.String
+		}
+		if description.Valid {
+			hc.Description = description.String
+		}
+		if contentHash.Valid {
+			hc.ContentHash = contentHash.String
+		}
+		if scopeID.Valid {
+			hc.ScopeID = scopeID.String
+		}
+		if storageURI.Valid {
+			hc.StorageURI = storageURI.String
+		}
+		if storageBucket.Valid {
+			hc.StorageBucket = storageBucket.String
+		}
+		if storagePath.Valid {
+			hc.StoragePath = storagePath.String
+		}
+		if ownerID.Valid {
+			hc.OwnerID = ownerID.String
+		}
+		if createdBy.Valid {
+			hc.CreatedBy = createdBy.String
+		}
+		if updatedBy.Valid {
+			hc.UpdatedBy = updatedBy.String
+		}
+		if visibility.Valid {
+			hc.Visibility = visibility.String
+		}
+		unmarshalJSON(configJSON, &hc.Config)
+		unmarshalJSON(filesJSON, &hc.Files)
+
+		harnessConfigs = append(harnessConfigs, hc)
+	}
+
+	return &store.ListResult[store.HarnessConfig]{
+		Items:      harnessConfigs,
 		TotalCount: totalCount,
 	}, nil
 }

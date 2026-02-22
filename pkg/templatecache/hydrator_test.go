@@ -98,6 +98,7 @@ func (m *mockHubClient) GroveAgents(groveID string) hubclient.AgentService { ret
 func (m *mockHubClient) Groves() hubclient.GroveService                  { return nil }
 func (m *mockHubClient) RuntimeBrokers() hubclient.RuntimeBrokerService      { return nil }
 func (m *mockHubClient) Templates() hubclient.TemplateService            { return m.templates }
+func (m *mockHubClient) HarnessConfigs() hubclient.HarnessConfigService  { return nil }
 func (m *mockHubClient) Workspace() hubclient.WorkspaceService           { return nil }
 func (m *mockHubClient) Users() hubclient.UserService                    { return nil }
 func (m *mockHubClient) Env() hubclient.EnvService                       { return nil }

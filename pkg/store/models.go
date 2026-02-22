@@ -291,6 +291,74 @@ const (
 	TemplateScopeUser   = "user"
 )
 
+// HarnessConfig represents a harness configuration in the Hub database.
+type HarnessConfig struct {
+	// Identity
+	ID          string `json:"id"`                    // UUID primary key
+	Name        string `json:"name"`                  // Harness config name (e.g., "claude", "gemini-experimental")
+	Slug        string `json:"slug"`                  // URL-safe identifier
+	DisplayName string `json:"displayName,omitempty"` // Human-friendly name
+	Description string `json:"description,omitempty"` // Optional description
+
+	// Configuration
+	Harness string             `json:"harness"` // claude, gemini, opencode, codex, generic
+	Config  *HarnessConfigData `json:"config,omitempty"`
+
+	// Content tracking
+	ContentHash string `json:"contentHash,omitempty"` // SHA-256 hash of harness config contents
+
+	// Scope
+	Scope   string `json:"scope"`             // global, grove, user
+	ScopeID string `json:"scopeId,omitempty"` // groveId or userId (null for global)
+
+	// Storage
+	StorageURI    string `json:"storageUri,omitempty"`    // Full bucket URI (e.g., "gs://bucket/harness-configs/path/")
+	StorageBucket string `json:"storageBucket,omitempty"` // Bucket name
+	StoragePath   string `json:"storagePath,omitempty"`   // Path within bucket
+
+	// File manifest
+	Files []TemplateFile `json:"files,omitempty"` // Manifest of harness config files (reuses TemplateFile)
+
+	// Protection
+	Locked bool   `json:"locked,omitempty"` // Prevent modifications
+	Status string `json:"status"`           // pending, active, archived
+
+	// Ownership
+	OwnerID    string `json:"ownerId,omitempty"`
+	CreatedBy  string `json:"createdBy,omitempty"`
+	UpdatedBy  string `json:"updatedBy,omitempty"`
+	Visibility string `json:"visibility"` // private, grove, public
+
+	// Timestamps
+	Created time.Time `json:"created"`
+	Updated time.Time `json:"updated"`
+}
+
+// HarnessConfigData holds the harness-specific configuration details.
+type HarnessConfigData struct {
+	Harness          string            `json:"harness,omitempty"`
+	Image            string            `json:"image,omitempty"`
+	User             string            `json:"user,omitempty"`
+	Model            string            `json:"model,omitempty"`
+	Args             []string          `json:"args,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	AuthSelectedType string            `json:"authSelectedType,omitempty"`
+}
+
+// HarnessConfigStatus constants
+const (
+	HarnessConfigStatusPending  = "pending"
+	HarnessConfigStatusActive   = "active"
+	HarnessConfigStatusArchived = "archived"
+)
+
+// HarnessConfigScope constants
+const (
+	HarnessConfigScopeGlobal = "global"
+	HarnessConfigScopeGrove  = "grove"
+	HarnessConfigScopeUser   = "user"
+)
+
 // TemplateConfig holds template configuration details.
 type TemplateConfig struct {
 	Harness     string            `json:"harness,omitempty"`

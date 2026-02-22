@@ -51,6 +51,9 @@ type Store interface {
 	// Template operations
 	TemplateStore
 
+	// HarnessConfig operations
+	HarnessConfigStore
+
 	// User operations
 	UserStore
 
@@ -240,6 +243,42 @@ type TemplateFilter struct {
 	Scope   string
 	ScopeID string
 	GroveID string // Deprecated: use ScopeID
+	Harness string
+	OwnerID string
+	Status  string
+	Search  string // Full-text search on name/description
+}
+
+// HarnessConfigStore defines harness config persistence operations.
+type HarnessConfigStore interface {
+	// CreateHarnessConfig creates a new harness config record.
+	CreateHarnessConfig(ctx context.Context, hc *HarnessConfig) error
+
+	// GetHarnessConfig retrieves a harness config by ID.
+	// Returns ErrNotFound if the harness config doesn't exist.
+	GetHarnessConfig(ctx context.Context, id string) (*HarnessConfig, error)
+
+	// GetHarnessConfigBySlug retrieves a harness config by its slug and scope.
+	// Returns ErrNotFound if the harness config doesn't exist.
+	GetHarnessConfigBySlug(ctx context.Context, slug, scope, scopeID string) (*HarnessConfig, error)
+
+	// UpdateHarnessConfig updates an existing harness config.
+	// Returns ErrNotFound if the harness config doesn't exist.
+	UpdateHarnessConfig(ctx context.Context, hc *HarnessConfig) error
+
+	// DeleteHarnessConfig removes a harness config by ID.
+	// Returns ErrNotFound if the harness config doesn't exist.
+	DeleteHarnessConfig(ctx context.Context, id string) error
+
+	// ListHarnessConfigs returns harness configs matching the filter criteria.
+	ListHarnessConfigs(ctx context.Context, filter HarnessConfigFilter, opts ListOptions) (*ListResult[HarnessConfig], error)
+}
+
+// HarnessConfigFilter defines criteria for filtering harness configs.
+type HarnessConfigFilter struct {
+	Name    string // Exact match on name
+	Scope   string
+	ScopeID string
 	Harness string
 	OwnerID string
 	Status  string
