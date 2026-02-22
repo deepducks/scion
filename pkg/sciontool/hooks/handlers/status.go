@@ -39,7 +39,7 @@ func NewStatusHandler() *StatusHandler {
 // should resist being overwritten by normal event-driven updates.
 func isStickyStatus(status string) bool {
 	switch status {
-	case string(hooks.StateWaitingForInput), string(hooks.StateCompleted):
+	case string(hooks.StateWaitingForInput), string(hooks.StateCompleted), string(hooks.StateLimitsExceeded):
 		return true
 	}
 	return false

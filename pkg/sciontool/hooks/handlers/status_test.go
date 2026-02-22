@@ -518,6 +518,114 @@ func TestStatusHandler_RemovesLegacySessionStatus(t *testing.T) {
 	assert.Nil(t, result["sessionStatus"], "legacy sessionStatus should be removed")
 }
 
+func TestStatusHandler_LimitsExceededIsStickyAgainstToolStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	statusPath := filepath.Join(tmpDir, "agent-info.json")
+	h := &StatusHandler{StatusPath: statusPath}
+
+	// Set status to LIMITS_EXCEEDED (sticky)
+	err := h.UpdateStatus(hooks.StateLimitsExceeded)
+	require.NoError(t, err)
+
+	// Tool-start should NOT clear LIMITS_EXCEEDED
+	err = h.Handle(&hooks.Event{
+		Name: hooks.EventToolStart,
+		Data: hooks.EventData{ToolName: "Bash"},
+	})
+	require.NoError(t, err)
+
+	info := readAgentInfo(t, statusPath)
+	assert.Equal(t, "LIMITS_EXCEEDED", info.Status, "LIMITS_EXCEEDED should not be cleared by tool-start")
+}
+
+func TestStatusHandler_LimitsExceededIsStickyAgainstToolEnd(t *testing.T) {
+	tmpDir := t.TempDir()
+	statusPath := filepath.Join(tmpDir, "agent-info.json")
+	h := &StatusHandler{StatusPath: statusPath}
+
+	err := h.UpdateStatus(hooks.StateLimitsExceeded)
+	require.NoError(t, err)
+
+	err = h.Handle(&hooks.Event{Name: hooks.EventToolEnd})
+	require.NoError(t, err)
+
+	info := readAgentInfo(t, statusPath)
+	assert.Equal(t, "LIMITS_EXCEEDED", info.Status, "LIMITS_EXCEEDED should not be cleared by tool-end")
+}
+
+func TestStatusHandler_LimitsExceededIsStickyAgainstAgentEnd(t *testing.T) {
+	tmpDir := t.TempDir()
+	statusPath := filepath.Join(tmpDir, "agent-info.json")
+	h := &StatusHandler{StatusPath: statusPath}
+
+	err := h.UpdateStatus(hooks.StateLimitsExceeded)
+	require.NoError(t, err)
+
+	err = h.Handle(&hooks.Event{Name: hooks.EventAgentEnd})
+	require.NoError(t, err)
+
+	info := readAgentInfo(t, statusPath)
+	assert.Equal(t, "LIMITS_EXCEEDED", info.Status, "LIMITS_EXCEEDED should not be cleared by agent-end")
+}
+
+func TestStatusHandler_LimitsExceededNotClearedByCompleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	statusPath := filepath.Join(tmpDir, "agent-info.json")
+	h := &StatusHandler{StatusPath: statusPath}
+
+	// Set LIMITS_EXCEEDED
+	err := h.UpdateStatus(hooks.StateLimitsExceeded)
+	require.NoError(t, err)
+
+	// Attempt to set COMPLETED via a non-new-work path (model-end maps to IDLE, not COMPLETED,
+	// but UpdateStatus directly can be called by other code)
+	// The key test: tool-end/agent-end should not overwrite LIMITS_EXCEEDED
+	err = h.Handle(&hooks.Event{Name: hooks.EventModelEnd})
+	require.NoError(t, err)
+
+	info := readAgentInfo(t, statusPath)
+	assert.Equal(t, "LIMITS_EXCEEDED", info.Status, "LIMITS_EXCEEDED should not be cleared by model-end")
+}
+
+func TestStatusHandler_LimitsExceededClearedByNewWork(t *testing.T) {
+	newWorkEvents := []struct {
+		name  string
+		event *hooks.Event
+	}{
+		{
+			name:  "PromptSubmit clears limits_exceeded",
+			event: &hooks.Event{Name: hooks.EventPromptSubmit},
+		},
+		{
+			name:  "AgentStart clears limits_exceeded",
+			event: &hooks.Event{Name: hooks.EventAgentStart},
+		},
+		{
+			name:  "SessionStart clears limits_exceeded",
+			event: &hooks.Event{Name: hooks.EventSessionStart},
+		},
+	}
+
+	for _, tt := range newWorkEvents {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			statusPath := filepath.Join(tmpDir, "agent-info.json")
+			h := &StatusHandler{StatusPath: statusPath}
+
+			// Pre-set status to LIMITS_EXCEEDED
+			err := h.UpdateStatus(hooks.StateLimitsExceeded)
+			require.NoError(t, err)
+
+			// Handle the new-work event
+			err = h.Handle(tt.event)
+			require.NoError(t, err)
+
+			info := readAgentInfo(t, statusPath)
+			assert.NotEqual(t, "LIMITS_EXCEEDED", info.Status, "LIMITS_EXCEEDED should be cleared by new work event")
+		})
+	}
+}
+
 func TestStatusHandler_NotificationSetsWaitingForInput(t *testing.T) {
 	tmpDir := t.TempDir()
 	statusPath := filepath.Join(tmpDir, "agent-info.json")

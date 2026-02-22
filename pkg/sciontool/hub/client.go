@@ -72,6 +72,7 @@ const (
 	StatusCloning          AgentStatus = "cloning"
 	StatusWaitingForInput  AgentStatus = "waiting_for_input"
 	StatusCompleted        AgentStatus = "completed"
+	StatusLimitsExceeded   AgentStatus = "limits_exceeded"
 )
 
 // StatusUpdate represents a status update request.
@@ -305,6 +306,14 @@ func (c *Client) ReportShuttingDown(ctx context.Context, message string) error {
 func (c *Client) ReportStopped(ctx context.Context, message string) error {
 	return c.UpdateStatus(ctx, StatusUpdate{
 		Status:  StatusStopped,
+		Message: message,
+	})
+}
+
+// ReportLimitsExceeded reports that the agent has exceeded its configured limits.
+func (c *Client) ReportLimitsExceeded(ctx context.Context, message string) error {
+	return c.UpdateStatus(ctx, StatusUpdate{
+		Status:  StatusLimitsExceeded,
 		Message: message,
 	})
 }

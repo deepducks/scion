@@ -92,7 +92,7 @@ func (h *HubHandler) Handle(event *hooks.Event) error {
 		// Tool-start clears WAITING_FOR_INPUT (user has responded) but
 		// preserves COMPLETED (tools may fire after task_completed as wrap-up).
 		localStatus := readLocalStatus()
-		if localStatus == string(hooks.StateCompleted) {
+		if localStatus == string(hooks.StateCompleted) || localStatus == string(hooks.StateLimitsExceeded) {
 			log.Debug("Hub: Skipping busy (completed is sticky, post-completion tool)")
 			return nil
 		}

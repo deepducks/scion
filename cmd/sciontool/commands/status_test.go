@@ -59,6 +59,18 @@ func TestStatusCommand(t *testing.T) {
 			wantStatus:      "WAITING_FOR_INPUT",
 			wantLogContains: "Agent requested input: Which option do you prefer?",
 		},
+		{
+			name:            "limits_exceeded with message",
+			args:            []string{"status", "limits_exceeded", "max_turns of 50 exceeded"},
+			wantStatus:      "LIMITS_EXCEEDED",
+			wantLogContains: "Agent limits exceeded: max_turns of 50 exceeded",
+		},
+		{
+			name:            "limits_exceeded with default message",
+			args:            []string{"status", "limits_exceeded"},
+			wantStatus:      "LIMITS_EXCEEDED",
+			wantLogContains: "Agent limits exceeded: Agent limits exceeded",
+		},
 	}
 
 	for _, tt := range tests {

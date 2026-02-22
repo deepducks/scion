@@ -90,6 +90,7 @@ const (
 	StateShuttingDown    AgentState = "SHUTTING_DOWN"
 	StateExited          AgentState = "EXITED"
 	StateError           AgentState = "ERROR"
+	StateLimitsExceeded  AgentState = "LIMITS_EXCEEDED"
 )
 
 // Handler is a function that processes a hook event.
