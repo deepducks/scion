@@ -701,7 +701,7 @@ export class ScionPageBrokerDetail extends LitElement {
     return html`
       <div class="grove-section">
         <div class="grove-section-header">
-          <sl-icon name="diagram-3"></sl-icon>
+          <sl-icon name="folder-fill"></sl-icon>
           <h3>
             <a href="/groves/${grove.groveId}">${grove.groveName || grove.groveId}</a>
           </h3>
