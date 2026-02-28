@@ -17,16 +17,17 @@
 /**
  * Debug Panel Component
  *
- * Displays debug information about authentication, session, and configuration.
- * Only visible when debug mode is enabled.
+ * Full-height right-side panel for real-time subscription system observability.
+ * Shows connection status, scope, subscriptions, state summary, event log,
+ * and auth debug info.
  */
 
-import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { LitElement, html, css, nothing } from 'lit';
+import { customElement, property, state, query } from 'lit/decorators.js';
+import { debugLog } from '../../client/debug-log.js';
+import type { DebugEntry, DebugCategory } from '../../client/debug-log.js';
+import { stateManager } from '../../client/state.js';
 
-/**
- * Debug data structure from /auth/debug endpoint
- */
 interface DebugData {
   debug: boolean;
   timestamp: string;
@@ -63,54 +64,67 @@ interface DebugData {
 
 @customElement('scion-debug-panel')
 export class ScionDebugPanel extends LitElement {
-  /**
-   * Whether the panel is expanded
-   */
   @property({ type: Boolean })
   expanded = false;
 
-  /**
-   * Debug data from server
-   */
   @state()
   private debugData: DebugData | null = null;
 
-  /**
-   * Loading state
-   */
   @state()
   private loading = false;
 
-  /**
-   * Error message
-   */
   @state()
   private error: string | null = null;
 
-  /**
-   * Whether debug mode is available
-   */
   @state()
   private debugAvailable = true;
+
+  @state()
+  private logEntries: readonly DebugEntry[] = [];
+
+  @state()
+  private expandedEntryId: number | null = null;
+
+  @state()
+  private authExpanded = false;
+
+  @state()
+  private stateIdsExpanded = false;
+
+  @state()
+  private autoScroll = true;
+
+  @query('.event-log-list')
+  private logListEl!: HTMLElement;
+
+  private logUpdateHandler = () => {
+    this.logEntries = [...debugLog.log];
+    if (this.autoScroll) {
+      this.updateComplete.then(() => this.scrollLogToBottom());
+    }
+  };
+
+  private stateUpdateHandler = () => {
+    this.requestUpdate();
+  };
 
   static override styles = css`
     :host {
       display: block;
-      position: fixed;
-      bottom: 0;
-      right: 0;
-      z-index: 10000;
-      font-family: var(--scion-font-mono, monospace);
+      font-family: var(--scion-font-mono, 'SF Mono', 'Fira Code', monospace);
       font-size: 0.75rem;
+      z-index: 10000;
     }
 
+    /* Toggle button - fixed at bottom-right */
     .toggle-button {
-      position: absolute;
+      position: fixed;
       bottom: 1rem;
       right: 1rem;
+      z-index: 10001;
       background: #1e293b;
       color: #f1f5f9;
-      border: none;
+      border: 1px solid #334155;
       padding: 0.5rem 1rem;
       border-radius: 0.375rem;
       cursor: pointer;
@@ -119,35 +133,48 @@ export class ScionDebugPanel extends LitElement {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      transition: background 0.15s;
     }
 
     .toggle-button:hover {
       background: #334155;
     }
 
-    .toggle-button.error {
-      background: #7f1d1d;
+    .toggle-button .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
     }
 
+    .dot.green { background: #22c55e; }
+    .dot.yellow { background: #f59e0b; }
+    .dot.red { background: #ef4444; }
+
+    /* Panel - full height right side */
     .panel {
-      position: absolute;
-      bottom: 4rem;
-      right: 1rem;
-      width: 450px;
-      max-height: 500px;
+      position: fixed;
+      top: 0;
+      right: 0;
+      height: 100vh;
+      width: 420px;
       background: #1e293b;
       color: #f1f5f9;
-      border-radius: 0.5rem;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+      transform: translateX(100%);
+      transition: transform 0.2s ease-out;
       overflow: hidden;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      display: none;
     }
 
-    .panel.expanded {
-      display: block;
+    .panel.open {
+      transform: translateX(0);
     }
 
+    /* Panel header */
     .panel-header {
       background: #0f172a;
       padding: 0.75rem 1rem;
@@ -155,6 +182,7 @@ export class ScionDebugPanel extends LitElement {
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid #334155;
+      flex-shrink: 0;
     }
 
     .panel-header h3 {
@@ -168,25 +196,30 @@ export class ScionDebugPanel extends LitElement {
       border: none;
       color: #94a3b8;
       cursor: pointer;
-      padding: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      font-family: inherit;
+      font-size: 0.875rem;
     }
 
     .panel-header button:hover {
       color: #f1f5f9;
     }
 
+    /* Scrollable content */
     .panel-content {
-      padding: 1rem;
-      max-height: 400px;
+      flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
     }
 
+    /* Sections */
     .section {
-      margin-bottom: 1rem;
+      border-bottom: 1px solid #334155;
+      padding: 0.75rem 1rem;
     }
 
     .section:last-child {
-      margin-bottom: 0;
+      border-bottom: none;
     }
 
     .section-title {
@@ -196,17 +229,41 @@ export class ScionDebugPanel extends LitElement {
       text-transform: uppercase;
       font-size: 0.625rem;
       letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
+    .section-title button {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.625rem;
+    }
+
+    .section-title button:hover {
+      color: #f1f5f9;
+      border-color: #64748b;
+    }
+
+    .collapsible-title {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .collapsible-title:hover {
+      color: #60a5fa;
+    }
+
+    /* Info rows */
     .info-row {
       display: flex;
       justify-content: space-between;
-      padding: 0.25rem 0;
-      border-bottom: 1px solid #334155;
-    }
-
-    .info-row:last-child {
-      border-bottom: none;
+      padding: 0.2rem 0;
     }
 
     .info-label {
@@ -215,39 +272,169 @@ export class ScionDebugPanel extends LitElement {
 
     .info-value {
       color: #f1f5f9;
+      text-align: right;
+      max-width: 250px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .info-value.success {
-      color: #22c55e;
+    .info-value.success { color: #22c55e; }
+    .info-value.warning { color: #f59e0b; }
+    .info-value.error { color: #ef4444; }
+
+    /* Status indicator */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.2rem 0;
     }
 
-    .info-value.warning {
-      color: #f59e0b;
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
     }
 
-    .info-value.error {
-      color: #ef4444;
+    .status-dot.connected { background: #22c55e; }
+    .status-dot.reconnecting { background: #f59e0b; animation: pulse 1s infinite; }
+    .status-dot.disconnected { background: #ef4444; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
 
-    .refresh-button {
-      background: #3b82f6;
-      color: white;
+    /* Subject list */
+    .subject-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .subject-item {
+      padding: 0.2rem 0;
+      color: #e2e8f0;
+      font-size: 0.7rem;
+    }
+
+    .subject-item::before {
+      content: '> ';
+      color: #64748b;
+    }
+
+    /* ID list (expandable) */
+    .id-list {
+      margin: 0.25rem 0 0 0;
+      padding: 0 0 0 0.75rem;
+      list-style: none;
+      font-size: 0.65rem;
+      color: #94a3b8;
+    }
+
+    .id-list li {
+      padding: 0.1rem 0;
+      font-family: inherit;
+    }
+
+    /* Event log */
+    .event-log-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .log-entry {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #1e293b;
+      cursor: pointer;
+    }
+
+    .log-entry:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .log-entry-header {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.7rem;
+    }
+
+    .log-time {
+      color: #64748b;
+      flex-shrink: 0;
+      font-size: 0.65rem;
+    }
+
+    .log-badge {
+      padding: 0.05rem 0.3rem;
+      border-radius: 0.2rem;
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .log-badge.sse { background: #1e3a5f; color: #60a5fa; }
+    .log-badge.state { background: #14532d; color: #4ade80; }
+    .log-badge.connection { background: #422006; color: #fbbf24; }
+
+    .log-label {
+      color: #e2e8f0;
+      flex-shrink: 0;
+    }
+
+    .log-subject {
+      color: #94a3b8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .log-detail {
+      background: #0f172a;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+      border-radius: 0.25rem;
+      font-size: 0.65rem;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      color: #64748b;
+      font-style: italic;
+      padding: 0.25rem 0;
+    }
+
+    /* Refresh/clear buttons */
+    .action-button {
+      background: #334155;
+      color: #e2e8f0;
       border: none;
-      padding: 0.5rem 1rem;
+      padding: 0.35rem 0.75rem;
       border-radius: 0.25rem;
       cursor: pointer;
       font-family: inherit;
-      font-size: inherit;
-      width: 100%;
-      margin-top: 0.5rem;
+      font-size: 0.7rem;
     }
 
-    .refresh-button:hover {
-      background: #2563eb;
-    }
-
-    .refresh-button:disabled {
+    .action-button:hover {
       background: #475569;
+    }
+
+    .action-button:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
@@ -266,29 +453,63 @@ export class ScionDebugPanel extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    // Auto-load debug data on connect
-    void this.loadDebugData();
+    debugLog.addEventListener('log-updated', this.logUpdateHandler);
+    stateManager.addEventListener('connected', this.stateUpdateHandler);
+    stateManager.addEventListener('disconnected', this.stateUpdateHandler);
+    stateManager.addEventListener('scope-changed', this.stateUpdateHandler);
+    stateManager.addEventListener('agents-updated', this.stateUpdateHandler);
+    stateManager.addEventListener('groves-updated', this.stateUpdateHandler);
+    stateManager.addEventListener('brokers-updated', this.stateUpdateHandler);
+    this.logEntries = [...debugLog.log];
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    debugLog.removeEventListener('log-updated', this.logUpdateHandler);
+    stateManager.removeEventListener('connected', this.stateUpdateHandler);
+    stateManager.removeEventListener('disconnected', this.stateUpdateHandler);
+    stateManager.removeEventListener('scope-changed', this.stateUpdateHandler);
+    stateManager.removeEventListener('agents-updated', this.stateUpdateHandler);
+    stateManager.removeEventListener('groves-updated', this.stateUpdateHandler);
+    stateManager.removeEventListener('brokers-updated', this.stateUpdateHandler);
+  }
+
+  private scrollLogToBottom(): void {
+    if (this.logListEl) {
+      this.logListEl.scrollTop = this.logListEl.scrollHeight;
+    }
+  }
+
+  private handleLogScroll(): void {
+    if (!this.logListEl) return;
+    const { scrollTop, scrollHeight, clientHeight } = this.logListEl;
+    // If user scrolled up more than 50px from bottom, pause auto-scroll
+    this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
+  }
+
+  private togglePanel(): void {
+    this.expanded = !this.expanded;
+    if (this.expanded && !this.debugData) {
+      void this.loadDebugData();
+    }
+  }
+
+  private toggleEntry(id: number): void {
+    this.expandedEntryId = this.expandedEntryId === id ? null : id;
   }
 
   private async loadDebugData(): Promise<void> {
     this.loading = true;
     this.error = null;
-
     try {
-      const response = await fetch('/auth/debug', {
-        credentials: 'include',
-      });
-
+      const response = await fetch('/auth/debug', { credentials: 'include' });
       if (response.status === 404) {
-        // Debug mode not available
         this.debugAvailable = false;
         return;
       }
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-
       this.debugData = (await response.json()) as DebugData;
       this.debugAvailable = true;
     } catch (err) {
@@ -299,163 +520,295 @@ export class ScionDebugPanel extends LitElement {
     }
   }
 
-  private togglePanel(): void {
-    this.expanded = !this.expanded;
-    if (this.expanded && !this.debugData) {
-      void this.loadDebugData();
+  private getConnectionStatus(): 'connected' | 'reconnecting' | 'disconnected' {
+    if (stateManager.isConnected) return 'connected';
+    const sse = stateManager.sseClientInstance;
+    if (sse.reconnectAttemptCount > 0) return 'reconnecting';
+    return 'disconnected';
+  }
+
+  private getConnectionStatusLabel(): string {
+    const status = this.getConnectionStatus();
+    if (status === 'connected') return 'Connected';
+    if (status === 'reconnecting') {
+      return `Reconnecting (attempt ${stateManager.sseClientInstance.reconnectAttemptCount})`;
+    }
+    return 'Disconnected';
+  }
+
+  private formatTime(ts: number): string {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+
+  private formatJson(data: unknown): string {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      return String(data);
     }
   }
 
+  private badgeClass(category: DebugCategory): string {
+    return `log-badge ${category}`;
+  }
+
   override render() {
-    // Hide if debug mode is not available
     if (!this.debugAvailable) {
       return html``;
     }
 
+    const connStatus = this.getConnectionStatus();
+    const dotClass = connStatus === 'connected' ? 'green' : connStatus === 'reconnecting' ? 'yellow' : 'red';
+
     return html`
-      <button
-        class="toggle-button ${this.error ? 'error' : ''}"
-        @click=${() => this.togglePanel()}
-      >
+      <button class="toggle-button" @click=${() => this.togglePanel()}>
+        <span class="dot ${dotClass}"></span>
         <span>${this.expanded ? 'Hide' : 'Show'} Debug</span>
       </button>
 
-      <div class="panel ${this.expanded ? 'expanded' : ''}">
+      <div class="panel ${this.expanded ? 'open' : ''}">
         <div class="panel-header">
-          <h3>Auth Debug Panel</h3>
+          <h3>Debug Panel</h3>
           <button @click=${() => this.togglePanel()}>X</button>
         </div>
-
         <div class="panel-content">
-          ${this.error ? html`<div class="error-message">${this.error}</div>` : ''}
-          ${this.loading ? html`<div>Loading...</div>` : this.renderDebugData()}
-
-          <button
-            class="refresh-button"
-            ?disabled=${this.loading}
-            @click=${() => this.loadDebugData()}
-          >
-            ${this.loading ? 'Loading...' : 'Refresh'}
-          </button>
+          ${this.renderConnectionStatus()}
+          ${this.renderCurrentScope()}
+          ${this.renderActiveSubscriptions()}
+          ${this.renderStateSummary()}
+          ${this.renderEventLog()}
+          ${this.renderAuthDebug()}
         </div>
       </div>
     `;
   }
 
-  private renderDebugData() {
-    if (!this.debugData) {
-      return html`<div>No data loaded</div>`;
-    }
-
-    const data = this.debugData;
+  private renderConnectionStatus() {
+    const status = this.getConnectionStatus();
+    const sse = stateManager.sseClientInstance;
 
     return html`
       <div class="section">
-        <div class="section-title">Authentication</div>
-        <div class="info-row">
-          <span class="info-label">State User</span>
-          <span class="info-value ${data.auth.stateUser ? 'success' : 'error'}">
-            ${data.auth.stateUser?.email || 'None'}
-          </span>
+        <div class="section-title">Connection Status</div>
+        <div class="status-row">
+          <div class="status-dot ${status}"></div>
+          <span>${this.getConnectionStatusLabel()}</span>
         </div>
+        ${debugLog.connectionId ? html`
+          <div class="info-row">
+            <span class="info-label">Connection ID</span>
+            <span class="info-value">${debugLog.connectionId}</span>
+          </div>
+        ` : nothing}
         <div class="info-row">
-          <span class="info-label">Session User</span>
-          <span class="info-value ${data.auth.sessionUser ? 'success' : 'error'}">
-            ${data.auth.sessionUser?.email || 'None'}
-          </span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Dev Token</span>
-          <span class="info-value">${data.auth.devToken}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Dev Auth Enabled</span>
-          <span class="info-value">${data.auth.devAuthEnabled ? 'Yes' : 'No'}</span>
+          <span class="info-label">Reconnect Attempts</span>
+          <span class="info-value">${sse.reconnectAttemptCount}</span>
         </div>
       </div>
+    `;
+  }
 
+  private renderCurrentScope() {
+    const scope = stateManager.currentScope;
+    if (!scope) {
+      return html`
+        <div class="section">
+          <div class="section-title">Current Scope</div>
+          <div class="empty-state">No scope set</div>
+        </div>
+      `;
+    }
+
+    let detail = scope.type;
+    if ('groveId' in scope) detail += ` | groveId: ${scope.groveId}`;
+    if ('agentId' in scope) detail += ` | agentId: ${scope.agentId}`;
+    if ('brokerId' in scope) detail += ` | brokerId: ${scope.brokerId}`;
+
+    return html`
       <div class="section">
-        <div class="section-title">Session</div>
+        <div class="section-title">Current Scope</div>
         <div class="info-row">
-          <span class="info-label">Exists</span>
-          <span class="info-value ${data.session.exists ? 'success' : 'error'}">
-            ${data.session.exists ? 'Yes' : 'No'}
-          </span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Is New</span>
-          <span class="info-value ${data.session.isNew ? 'warning' : 'success'}">
-            ${data.session.isNew ? 'Yes' : 'No'}
-          </span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Has User</span>
-          <span class="info-value ${data.session.hasUser ? 'success' : 'error'}">
-            ${data.session.hasUser ? 'Yes' : 'No'}
-          </span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Keys</span>
-          <span class="info-value">${data.session.keys.join(', ') || 'None'}</span>
+          <span class="info-value">${detail}</span>
         </div>
       </div>
+    `;
+  }
 
+  private renderActiveSubscriptions() {
+    const subjects = stateManager.currentSubjects;
+    return html`
       <div class="section">
-        <div class="section-title">Cookies</div>
-        <div class="info-row">
-          <span class="info-label">Header</span>
-          <span class="info-value">${data.cookies.header}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Count</span>
-          <span class="info-value">${data.cookies.count}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Session Cookie</span>
-          <span class="info-value ${data.cookies.hasSessionCookie ? 'success' : 'error'}">
-            ${data.cookies.hasSessionCookie ? 'Present' : 'Missing'}
+        <div class="section-title">Active Subscriptions</div>
+        ${subjects.length === 0
+          ? html`<div class="empty-state">No active subscriptions</div>`
+          : html`
+            <ul class="subject-list">
+              ${subjects.map(s => html`<li class="subject-item">${s}</li>`)}
+            </ul>
+          `}
+      </div>
+    `;
+  }
+
+  private renderStateSummary() {
+    const snap = stateManager.getStateSnapshot();
+
+    return html`
+      <div class="section">
+        <div class="section-title">
+          <span class="collapsible-title" @click=${() => { this.stateIdsExpanded = !this.stateIdsExpanded; }}>
+            State Summary ${this.stateIdsExpanded ? '[-]' : '[+]'}
           </span>
         </div>
         <div class="info-row">
-          <span class="info-label">Names</span>
-          <span class="info-value">${data.cookies.names.join(', ') || 'None'}</span>
+          <span class="info-label">Agents</span>
+          <span class="info-value">${snap.agentCount}</span>
         </div>
+        <div class="info-row">
+          <span class="info-label">Groves</span>
+          <span class="info-value">${snap.groveCount}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Brokers</span>
+          <span class="info-value">${snap.brokerCount}</span>
+        </div>
+        ${snap.deletedGroveIds.length > 0 ? html`
+          <div class="info-row">
+            <span class="info-label">Deleted Groves</span>
+            <span class="info-value warning">${snap.deletedGroveIds.length}</span>
+          </div>
+        ` : nothing}
+        ${this.stateIdsExpanded ? html`
+          ${snap.agentIds.length > 0 ? html`
+            <div class="info-label" style="margin-top: 0.4rem;">Agent IDs:</div>
+            <ul class="id-list">${snap.agentIds.map(id => html`<li>${id}</li>`)}</ul>
+          ` : nothing}
+          ${snap.groveIds.length > 0 ? html`
+            <div class="info-label" style="margin-top: 0.4rem;">Grove IDs:</div>
+            <ul class="id-list">${snap.groveIds.map(id => html`<li>${id}</li>`)}</ul>
+          ` : nothing}
+          ${snap.brokerIds.length > 0 ? html`
+            <div class="info-label" style="margin-top: 0.4rem;">Broker IDs:</div>
+            <ul class="id-list">${snap.brokerIds.map(id => html`<li>${id}</li>`)}</ul>
+          ` : nothing}
+          ${snap.deletedGroveIds.length > 0 ? html`
+            <div class="info-label" style="margin-top: 0.4rem;">Deleted Grove IDs:</div>
+            <ul class="id-list">${snap.deletedGroveIds.map(id => html`<li>${id}</li>`)}</ul>
+          ` : nothing}
+        ` : nothing}
       </div>
+    `;
+  }
 
+  private renderEventLog() {
+    return html`
       <div class="section">
-        <div class="section-title">Configuration</div>
-        <div class="info-row">
-          <span class="info-label">Production</span>
-          <span class="info-value">${data.config.production ? 'Yes' : 'No'}</span>
+        <div class="section-title">
+          <span>Event Log (${this.logEntries.length})</span>
+          <button @click=${() => debugLog.clear()}>Clear</button>
         </div>
-        <div class="info-row">
-          <span class="info-label">Debug</span>
-          <span class="info-value">${data.config.debug ? 'Yes' : 'No'}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Base URL</span>
-          <span class="info-value">${data.config.baseUrl}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Hub API URL</span>
-          <span class="info-value">${data.config.hubApiUrl}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Google OAuth</span>
-          <span class="info-value">${data.config.hasGoogleOAuth ? 'Configured' : 'Not configured'}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">GitHub OAuth</span>
-          <span class="info-value">${data.config.hasGitHubOAuth ? 'Configured' : 'Not configured'}</span>
-        </div>
+        ${this.logEntries.length === 0
+          ? html`<div class="empty-state">No events captured</div>`
+          : html`
+            <ul class="event-log-list" @scroll=${() => this.handleLogScroll()}>
+              ${this.logEntries.map(entry => this.renderLogEntry(entry))}
+            </ul>
+          `}
       </div>
+    `;
+  }
 
-      <div class="section">
-        <div class="section-title">Timestamp</div>
-        <div class="info-row">
-          <span class="info-label">Server Time</span>
-          <span class="info-value">${data.timestamp}</span>
+  private renderLogEntry(entry: DebugEntry) {
+    const isExpanded = this.expandedEntryId === entry.id;
+
+    return html`
+      <li class="log-entry" @click=${() => this.toggleEntry(entry.id)}>
+        <div class="log-entry-header">
+          <span class="log-time">${this.formatTime(entry.timestamp)}</span>
+          <span class="${this.badgeClass(entry.category)}">${entry.category}</span>
+          <span class="log-label">${entry.label}</span>
+          ${entry.subject ? html`<span class="log-subject">${entry.subject}</span>` : nothing}
         </div>
+        ${isExpanded && entry.data != null ? html`
+          <div class="log-detail">${this.formatJson(entry.data)}</div>
+        ` : nothing}
+      </li>
+    `;
+  }
+
+  private renderAuthDebug() {
+    return html`
+      <div class="section">
+        <div class="section-title">
+          <span class="collapsible-title" @click=${() => { this.authExpanded = !this.authExpanded; }}>
+            Auth Debug ${this.authExpanded ? '[-]' : '[+]'}
+          </span>
+          ${this.authExpanded ? html`
+            <button class="action-button" ?disabled=${this.loading} @click=${() => this.loadDebugData()}>
+              ${this.loading ? 'Loading...' : 'Refresh'}
+            </button>
+          ` : nothing}
+        </div>
+        ${this.authExpanded ? html`
+          ${this.error ? html`<div class="error-message">${this.error}</div>` : nothing}
+          ${this.loading ? html`<div class="empty-state">Loading...</div>` : this.renderAuthData()}
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderAuthData() {
+    if (!this.debugData) {
+      return html`<div class="empty-state">No auth data loaded</div>`;
+    }
+    const data = this.debugData;
+
+    return html`
+      <div class="info-row">
+        <span class="info-label">State User</span>
+        <span class="info-value ${data.auth.stateUser ? 'success' : 'error'}">
+          ${data.auth.stateUser?.email || 'None'}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Session User</span>
+        <span class="info-value ${data.auth.sessionUser ? 'success' : 'error'}">
+          ${data.auth.sessionUser?.email || 'None'}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Dev Auth</span>
+        <span class="info-value">${data.auth.devAuthEnabled ? 'Yes' : 'No'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Session Exists</span>
+        <span class="info-value ${data.session.exists ? 'success' : 'error'}">
+          ${data.session.exists ? 'Yes' : 'No'}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Session Cookie</span>
+        <span class="info-value ${data.cookies.hasSessionCookie ? 'success' : 'error'}">
+          ${data.cookies.hasSessionCookie ? 'Present' : 'Missing'}
+        </span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Production</span>
+        <span class="info-value">${data.config.production ? 'Yes' : 'No'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Base URL</span>
+        <span class="info-value">${data.config.baseUrl}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Hub API URL</span>
+        <span class="info-value">${data.config.hubApiUrl}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Server Time</span>
+        <span class="info-value">${data.timestamp}</span>
       </div>
     `;
   }

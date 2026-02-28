@@ -161,6 +161,16 @@ export class SSEClient extends EventTarget {
     return this.eventSource?.readyState === EventSource.OPEN;
   }
 
+  /** Current subscription subjects */
+  get currentSubjects(): string[] {
+    return this.subjects;
+  }
+
+  /** Number of reconnect attempts since last successful connection */
+  get reconnectAttemptCount(): number {
+    return this.reconnectAttempts;
+  }
+
   // Typed addEventListener overloads
   addEventListener<K extends keyof SSEClientEventMap>(
     type: K,

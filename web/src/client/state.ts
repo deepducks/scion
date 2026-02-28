@@ -335,6 +335,37 @@ export class StateManager extends EventTarget {
     }
   }
 
+  /** Expose the SSE client for debug instrumentation */
+  get sseClientInstance(): SSEClient {
+    return this.sseClient;
+  }
+
+  /** Current subscription subjects from the SSE client */
+  get currentSubjects(): string[] {
+    return this.sseClient.currentSubjects;
+  }
+
+  /** Snapshot of current state for debug display */
+  getStateSnapshot(): {
+    agentCount: number;
+    groveCount: number;
+    brokerCount: number;
+    agentIds: string[];
+    groveIds: string[];
+    brokerIds: string[];
+    deletedGroveIds: string[];
+  } {
+    return {
+      agentCount: this.state.agents.size,
+      groveCount: this.state.groves.size,
+      brokerCount: this.state.brokers.size,
+      agentIds: Array.from(this.state.agents.keys()),
+      groveIds: Array.from(this.state.groves.keys()),
+      brokerIds: Array.from(this.state.brokers.keys()),
+      deletedGroveIds: Array.from(this.state.deletedGroveIds),
+    };
+  }
+
   /** Disconnect the SSE connection. Called on page unload. */
   disconnect(): void {
     this.sseClient.disconnect();

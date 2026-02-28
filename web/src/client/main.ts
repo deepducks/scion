@@ -22,6 +22,7 @@
 
 import type { PageData, User } from '../shared/types.js';
 import { stateManager } from './state.js';
+import { debugLog } from './debug-log.js';
 
 // Import Shoelace base path config (needed for icons).
 // Icons are copied to public/shoelace/ by scripts/copy-shoelace-icons.mjs
@@ -163,6 +164,9 @@ async function init(): Promise<void> {
       stateManager.hydrate(pageDataObj, pageDataObj._capabilities);
     }
   }
+
+  // Attach debug logger to state manager to capture all SSE events
+  debugLog.attach(stateManager);
 
   // Fetch current user from session if not provided by SSR
   if (!currentUser) {
