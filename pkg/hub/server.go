@@ -361,6 +361,7 @@ type Server struct {
 	notificationDispatcher    *NotificationDispatcher // Notification dispatcher for agent status events
 	maintenance               *MaintenanceState   // Runtime maintenance mode state
 	embeddedBrokerID          string              // Broker ID when running in hub+broker combo mode
+	scheduler                 *Scheduler          // Unified scheduler for recurring tasks
 }
 
 // New creates a new Hub API server.
@@ -825,45 +826,19 @@ func (s *Server) GenerateAgentToken(agentID, groveID string, additionalScopes ..
 }
 
 // Start starts the HTTP server.
-// startPurgeLoop starts a background goroutine that periodically purges expired
-// soft-deleted agents. It's a no-op if soft-delete retention is not configured.
-func (s *Server) startPurgeLoop(ctx context.Context) {
-	retention := s.config.SoftDeleteRetention
-	if retention <= 0 {
-		return
-	}
-
-	slog.Info("Starting soft-delete purge loop", "retention", retention, "interval", "1h")
-
-	go func() {
-		// Run immediately on startup
-		s.purgeExpiredAgents(ctx)
-
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				s.purgeExpiredAgents(ctx)
-			}
+// purgeHandler returns a recurring handler function that permanently removes
+// soft-deleted agents that have exceeded the retention period.
+func (s *Server) purgeHandler() func(ctx context.Context) {
+	return func(ctx context.Context) {
+		cutoff := time.Now().Add(-s.config.SoftDeleteRetention)
+		purged, err := s.store.PurgeDeletedAgents(ctx, cutoff)
+		if err != nil {
+			slog.Error("Scheduler: agent purge failed", "error", err)
+			return
 		}
-	}()
-}
-
-// purgeExpiredAgents permanently removes soft-deleted agents that have exceeded
-// the retention period.
-func (s *Server) purgeExpiredAgents(ctx context.Context) {
-	cutoff := time.Now().Add(-s.config.SoftDeleteRetention)
-	purged, err := s.store.PurgeDeletedAgents(ctx, cutoff)
-	if err != nil {
-		slog.Error("Failed to purge deleted agents", "error", err)
-		return
-	}
-	if purged > 0 {
-		slog.Info("Purged expired soft-deleted agents", "count", purged, "cutoff", cutoff)
+		if purged > 0 {
+			slog.Info("Scheduler: purged soft-deleted agents", "count", purged, "cutoff", cutoff)
+		}
 	}
 }
 
@@ -881,8 +856,12 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	s.mu.Unlock()
 
-	// Start the purge loop for soft-deleted agents
-	s.startPurgeLoop(ctx)
+	// Initialize and start the scheduler
+	s.scheduler = NewScheduler()
+	if s.config.SoftDeleteRetention > 0 {
+		s.scheduler.RegisterRecurring("soft-delete-purge", 60, s.purgeHandler())
+	}
+	s.scheduler.Start(ctx)
 
 	// Start notification dispatcher (uses the current event publisher).
 	// The dispatcher is resolved lazily so it works even if SetDispatcher
@@ -930,6 +909,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.brokerAuthService.Close()
 	}
 
+	// Stop scheduler
+	if s.scheduler != nil {
+		s.scheduler.Stop()
+	}
+
 	// Stop notification dispatcher before closing event publisher
 	if s.notificationDispatcher != nil {
 		s.notificationDispatcher.Stop()
@@ -961,6 +945,9 @@ func (s *Server) CleanupResources(ctx context.Context) error {
 	}
 	if s.brokerAuthService != nil {
 		s.brokerAuthService.Close()
+	}
+	if s.scheduler != nil {
+		s.scheduler.Stop()
 	}
 	if s.notificationDispatcher != nil {
 		s.notificationDispatcher.Stop()

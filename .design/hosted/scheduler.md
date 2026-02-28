@@ -850,12 +850,12 @@ When the Hub moves to a multi-node deployment, the scheduler will need leader el
 
 ## Implementation Plan
 
-### Phase 1: Scheduler Core
-1. Add `Scheduler` struct and `RecurringHandler` type to `pkg/hub/scheduler.go`.
-2. Implement root ticker loop with handler registration and invocation.
-3. Wire scheduler into `Server` startup and shutdown.
-4. Migrate existing `startPurgeLoop` to a registered recurring handler.
-5. Unit tests for scheduler lifecycle and handler invocation.
+### Phase 1: Scheduler Core ✅
+1. ~~Add `Scheduler` struct and `RecurringHandler` type to `pkg/hub/scheduler.go`.~~
+2. ~~Implement root ticker loop with handler registration and invocation.~~
+3. ~~Wire scheduler into `Server` startup and shutdown.~~
+4. ~~Migrate existing `startPurgeLoop` to a registered recurring handler.~~
+5. ~~Unit tests for scheduler lifecycle and handler invocation.~~
 
 ### Phase 2: Agent Heartbeat Timeout
 6. Add `AgentStatusUndetermined` constant to `pkg/store/models.go`.
