@@ -24,7 +24,14 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { PageData, Grove, EnvVar, Secret, SecretType } from '../../shared/types.js';
+import type {
+  PageData,
+  Grove,
+  EnvVar,
+  Secret,
+  SecretType,
+  InjectionMode,
+} from '../../shared/types.js';
 import { apiFetch } from '../../client/api.js';
 
 @customElement('scion-page-grove-configuration')
@@ -53,6 +60,7 @@ export class ScionPageGroveConfiguration extends LitElement {
   @state() private envDialogDescription = '';
   @state() private envDialogSensitive = false;
   @state() private envDialogSecret = false;
+  @state() private envDialogInjectionMode: InjectionMode = 'always';
   @state() private envDialogLoading = false;
   @state() private envDialogError: string | null = null;
   @state() private envDeletingKey: string | null = null;
@@ -70,6 +78,7 @@ export class ScionPageGroveConfiguration extends LitElement {
   @state() private secretDialogDescription = '';
   @state() private secretDialogType: SecretType = 'environment';
   @state() private secretDialogTarget = '';
+  @state() private secretDialogInjectionMode: InjectionMode = 'always';
   @state() private secretDialogLoading = false;
   @state() private secretDialogError: string | null = null;
   @state() private secretDeletingKey: string | null = null;
@@ -458,6 +467,33 @@ export class ScionPageGroveConfiguration extends LitElement {
       margin-top: 0.125rem;
     }
 
+    .radio-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .radio-field-label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--scion-text, #1e293b);
+    }
+
+    .radio-field-help {
+      font-size: 0.75rem;
+      color: var(--scion-text-muted, #64748b);
+    }
+
+    .badge.inject-always {
+      background: var(--sl-color-primary-100, #dbeafe);
+      color: var(--sl-color-primary-700, #1d4ed8);
+    }
+
+    .badge.inject-as-needed {
+      background: var(--scion-bg-subtle, #f1f5f9);
+      color: var(--scion-text-muted, #64748b);
+    }
+
     @media (max-width: 768px) {
       .hide-mobile {
         display: none;
@@ -530,6 +566,7 @@ export class ScionPageGroveConfiguration extends LitElement {
     this.envDialogDescription = '';
     this.envDialogSensitive = false;
     this.envDialogSecret = false;
+    this.envDialogInjectionMode = 'always';
     this.envDialogError = null;
     this.envDialogOpen = true;
   }
@@ -541,6 +578,7 @@ export class ScionPageGroveConfiguration extends LitElement {
     this.envDialogDescription = envVar.description || '';
     this.envDialogSensitive = envVar.sensitive;
     this.envDialogSecret = envVar.secret;
+    this.envDialogInjectionMode = envVar.injectionMode || 'always';
     this.envDialogError = null;
     this.envDialogOpen = true;
   }
@@ -574,6 +612,7 @@ export class ScionPageGroveConfiguration extends LitElement {
         description: this.envDialogDescription || undefined,
         sensitive: this.envDialogSensitive,
         secret: this.envDialogSecret,
+        injectionMode: this.envDialogInjectionMode,
       };
 
       const response = await apiFetch(
@@ -656,6 +695,7 @@ export class ScionPageGroveConfiguration extends LitElement {
     this.secretDialogDescription = '';
     this.secretDialogType = 'environment';
     this.secretDialogTarget = '';
+    this.secretDialogInjectionMode = 'always';
     this.secretDialogError = null;
     this.secretDialogOpen = true;
   }
@@ -667,6 +707,7 @@ export class ScionPageGroveConfiguration extends LitElement {
     this.secretDialogDescription = secret.description || '';
     this.secretDialogType = secret.type;
     this.secretDialogTarget = secret.target || '';
+    this.secretDialogInjectionMode = secret.injectionMode || 'always';
     this.secretDialogError = null;
     this.secretDialogOpen = true;
   }
@@ -700,6 +741,7 @@ export class ScionPageGroveConfiguration extends LitElement {
         description: this.secretDialogDescription || undefined,
         type: this.secretDialogType,
         target: this.secretDialogTarget || undefined,
+        injectionMode: this.secretDialogInjectionMode,
       };
 
       const response = await apiFetch(
@@ -852,6 +894,7 @@ export class ScionPageGroveConfiguration extends LitElement {
               <th>Key</th>
               <th>Value</th>
               <th class="hide-mobile">Description</th>
+              <th>Inject</th>
               <th>Flags</th>
               <th class="hide-mobile">Updated</th>
               <th class="actions-cell"></th>
@@ -877,6 +920,11 @@ export class ScionPageGroveConfiguration extends LitElement {
         <td class="key-cell">${envVar.key}</td>
         <td class="value-cell">${displayValue}</td>
         <td class="description-cell hide-mobile">${envVar.description || '\u2014'}</td>
+        <td>
+          ${envVar.injectionMode === 'as_needed'
+            ? html`<span class="badge inject-as-needed">as needed</span>`
+            : html`<span class="badge inject-always">always</span>`}
+        </td>
         <td>
           <div class="badges">
             ${envVar.sensitive
@@ -976,6 +1024,22 @@ export class ScionPageGroveConfiguration extends LitElement {
             }}
           ></sl-textarea>
 
+          <div class="radio-field">
+            <span class="radio-field-label">Inject</span>
+            <sl-radio-group
+              value=${this.envDialogInjectionMode}
+              @sl-change=${(e: Event) => {
+                this.envDialogInjectionMode = (e.target as HTMLInputElement).value as InjectionMode;
+              }}
+            >
+              <sl-radio-button value="always">Always</sl-radio-button>
+              <sl-radio-button value="as_needed">As needed</sl-radio-button>
+            </sl-radio-group>
+            <span class="radio-field-help">
+              "As needed" injects only when the agent configuration requests this value.
+            </span>
+          </div>
+
           <div class="checkbox-group">
             <label class="checkbox-label">
               <input
@@ -1057,9 +1121,7 @@ export class ScionPageGroveConfiguration extends LitElement {
         </div>
 
         ${this.secretsLoading
-          ? html`<div class="section-loading">
-              <sl-spinner></sl-spinner> Loading secrets...
-            </div>`
+          ? html`<div class="section-loading"><sl-spinner></sl-spinner> Loading secrets...</div>`
           : this.secretsError
             ? html`<div class="section-error">
                 <span>${this.secretsError}</span>
@@ -1083,6 +1145,7 @@ export class ScionPageGroveConfiguration extends LitElement {
             <tr>
               <th>Key</th>
               <th>Type</th>
+              <th>Inject</th>
               <th class="hide-mobile">Description</th>
               <th>Version</th>
               <th class="hide-mobile">Updated</th>
@@ -1112,6 +1175,11 @@ export class ScionPageGroveConfiguration extends LitElement {
         </td>
         <td>
           <span class="type-badge ${secret.type}">${secret.type}</span>
+        </td>
+        <td>
+          ${secret.injectionMode === 'as_needed'
+            ? html`<span class="badge inject-as-needed">as needed</span>`
+            : html`<span class="badge inject-always">always</span>`}
         </td>
         <td class="description-cell hide-mobile">${secret.description || '\u2014'}</td>
         <td>
@@ -1227,6 +1295,23 @@ export class ScionPageGroveConfiguration extends LitElement {
               this.secretDialogDescription = (e.target as HTMLTextAreaElement).value;
             }}
           ></sl-textarea>
+
+          <div class="radio-field">
+            <span class="radio-field-label">Inject</span>
+            <sl-radio-group
+              value=${this.secretDialogInjectionMode}
+              @sl-change=${(e: Event) => {
+                this.secretDialogInjectionMode = (e.target as HTMLInputElement)
+                  .value as InjectionMode;
+              }}
+            >
+              <sl-radio-button value="always">Always</sl-radio-button>
+              <sl-radio-button value="as_needed">As needed</sl-radio-button>
+            </sl-radio-group>
+            <span class="radio-field-help">
+              "As needed" injects only when the agent configuration requests this value.
+            </span>
+          </div>
 
           ${this.secretDialogError
             ? html`<div class="dialog-error">${this.secretDialogError}</div>`

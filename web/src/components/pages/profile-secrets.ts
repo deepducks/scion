@@ -24,7 +24,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
-import type { Secret, SecretType } from '../../shared/types.js';
+import type { Secret, SecretType, InjectionMode } from '../../shared/types.js';
 
 @customElement('scion-page-profile-secrets')
 export class ScionPageProfileSecrets extends LitElement {
@@ -40,6 +40,7 @@ export class ScionPageProfileSecrets extends LitElement {
   @state() private dialogDescription = '';
   @state() private dialogType: SecretType = 'environment';
   @state() private dialogTarget = '';
+  @state() private dialogInjectionMode: InjectionMode = 'always';
   @state() private dialogLoading = false;
   @state() private dialogError: string | null = null;
 
@@ -303,6 +304,43 @@ export class ScionPageProfileSecrets extends LitElement {
       color: var(--sl-color-warning-600, #d97706);
     }
 
+    .radio-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .radio-field-label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--scion-text, #1e293b);
+    }
+
+    .radio-field-help {
+      font-size: 0.75rem;
+      color: var(--scion-text-muted, #64748b);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+    }
+
+    .badge.inject-always {
+      background: var(--sl-color-primary-100, #dbeafe);
+      color: var(--sl-color-primary-700, #1d4ed8);
+    }
+
+    .badge.inject-as-needed {
+      background: var(--scion-bg-subtle, #f1f5f9);
+      color: var(--scion-text-muted, #64748b);
+    }
+
     @media (max-width: 768px) {
       .hide-mobile {
         display: none;
@@ -346,6 +384,7 @@ export class ScionPageProfileSecrets extends LitElement {
     this.dialogDescription = '';
     this.dialogType = 'environment';
     this.dialogTarget = '';
+    this.dialogInjectionMode = 'always';
     this.dialogError = null;
     this.dialogOpen = true;
   }
@@ -357,6 +396,7 @@ export class ScionPageProfileSecrets extends LitElement {
     this.dialogDescription = secret.description || '';
     this.dialogType = secret.type;
     this.dialogTarget = secret.target || '';
+    this.dialogInjectionMode = secret.injectionMode || 'always';
     this.dialogError = null;
     this.dialogOpen = true;
   }
@@ -389,6 +429,7 @@ export class ScionPageProfileSecrets extends LitElement {
         description: this.dialogDescription || undefined,
         type: this.dialogType,
         target: this.dialogTarget || undefined,
+        injectionMode: this.dialogInjectionMode,
       };
 
       const response = await fetch(`/api/v1/secrets/${encodeURIComponent(key)}`, {
@@ -502,6 +543,7 @@ export class ScionPageProfileSecrets extends LitElement {
             <tr>
               <th>Key</th>
               <th>Type</th>
+              <th>Inject</th>
               <th class="hide-mobile">Description</th>
               <th>Version</th>
               <th class="hide-mobile">Updated</th>
@@ -531,6 +573,11 @@ export class ScionPageProfileSecrets extends LitElement {
         </td>
         <td>
           <span class="type-badge ${secret.type}">${secret.type}</span>
+        </td>
+        <td>
+          ${secret.injectionMode === 'as_needed'
+            ? html`<span class="badge inject-as-needed">as needed</span>`
+            : html`<span class="badge inject-always">always</span>`}
         </td>
         <td class="description-cell hide-mobile">${secret.description || '\u2014'}</td>
         <td>
@@ -640,6 +687,22 @@ export class ScionPageProfileSecrets extends LitElement {
               this.dialogDescription = (e.target as HTMLTextAreaElement).value;
             }}
           ></sl-textarea>
+
+          <div class="radio-field">
+            <span class="radio-field-label">Inject</span>
+            <sl-radio-group
+              value=${this.dialogInjectionMode}
+              @sl-change=${(e: Event) => {
+                this.dialogInjectionMode = (e.target as HTMLInputElement).value as InjectionMode;
+              }}
+            >
+              <sl-radio-button value="always">Always</sl-radio-button>
+              <sl-radio-button value="as_needed">As needed</sl-radio-button>
+            </sl-radio-group>
+            <span class="radio-field-help">
+              "As needed" injects only when the agent configuration requests this value.
+            </span>
+          </div>
 
           ${this.dialogError ? html`<div class="dialog-error">${this.dialogError}</div>` : nothing}
         </form>

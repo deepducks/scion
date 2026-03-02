@@ -123,19 +123,20 @@ func (b *LocalBackend) Resolve(ctx context.Context, userID, groveID, brokerID st
 
 			merged[s.Key] = SecretWithValue{
 				SecretMeta: SecretMeta{
-					ID:          s.ID,
-					Name:        s.Key,
-					SecretType:  secretType,
-					Target:      target,
-					Scope:       sc.scope,
-					ScopeID:     sc.scopeID,
-					Description: s.Description,
-					SecretRef:   s.SecretRef,
-					Version:     s.Version,
-					Created:     s.Created,
-					Updated:     s.Updated,
-					CreatedBy:   s.CreatedBy,
-					UpdatedBy:   s.UpdatedBy,
+					ID:            s.ID,
+					Name:          s.Key,
+					SecretType:    secretType,
+					Target:        target,
+					Scope:         sc.scope,
+					ScopeID:       sc.scopeID,
+					Description:   s.Description,
+					InjectionMode: s.InjectionMode,
+					SecretRef:     s.SecretRef,
+					Version:       s.Version,
+					Created:       s.Created,
+					Updated:       s.Updated,
+					CreatedBy:     s.CreatedBy,
+					UpdatedBy:     s.UpdatedBy,
 				},
 				Value: value,
 			}
@@ -159,6 +160,10 @@ func toStoreSecret(input *SetSecretInput) *store.Secret {
 	if target == "" {
 		target = input.Name
 	}
+	injectionMode := input.InjectionMode
+	if injectionMode == "" {
+		injectionMode = store.InjectionModeAsNeeded
+	}
 	return &store.Secret{
 		ID:             api.NewUUID(),
 		Key:            input.Name,
@@ -168,6 +173,7 @@ func toStoreSecret(input *SetSecretInput) *store.Secret {
 		Scope:          input.Scope,
 		ScopeID:        input.ScopeID,
 		Description:    input.Description,
+		InjectionMode:  injectionMode,
 		CreatedBy:      input.CreatedBy,
 		UpdatedBy:      input.UpdatedBy,
 	}
@@ -186,19 +192,20 @@ func toStoreFilter(f Filter) store.SecretFilter {
 // fromStoreSecretMeta converts a store.Secret to a SecretMeta.
 func fromStoreSecretMeta(s *store.Secret) *SecretMeta {
 	return &SecretMeta{
-		ID:          s.ID,
-		Name:        s.Key,
-		SecretType:  s.SecretType,
-		Target:      s.Target,
-		Scope:       s.Scope,
-		ScopeID:     s.ScopeID,
-		Description: s.Description,
-		SecretRef:   s.SecretRef,
-		Version:     s.Version,
-		Created:     s.Created,
-		Updated:     s.Updated,
-		CreatedBy:   s.CreatedBy,
-		UpdatedBy:   s.UpdatedBy,
+		ID:            s.ID,
+		Name:          s.Key,
+		SecretType:    s.SecretType,
+		Target:        s.Target,
+		Scope:         s.Scope,
+		ScopeID:       s.ScopeID,
+		Description:   s.Description,
+		InjectionMode: s.InjectionMode,
+		SecretRef:     s.SecretRef,
+		Version:       s.Version,
+		Created:       s.Created,
+		Updated:       s.Updated,
+		CreatedBy:     s.CreatedBy,
+		UpdatedBy:     s.UpdatedBy,
 	}
 }
 

@@ -52,19 +52,20 @@ type Filter struct {
 
 // SecretMeta holds secret metadata without the secret value.
 type SecretMeta struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`        // Secret key name (e.g., "API_KEY")
-	SecretType  string    `json:"type"`        // environment, variable, file
-	Target      string    `json:"target"`      // Projection target
-	Scope       string    `json:"scope"`       // user, grove, runtime_broker
-	ScopeID     string    `json:"scopeId"`     // ID of the scoped entity
-	Description string    `json:"description,omitempty"`
-	SecretRef   string    `json:"secretRef,omitempty"` // External reference (e.g., GCP SM resource path)
-	Version     int       `json:"version"`
-	Created     time.Time `json:"created"`
-	Updated     time.Time `json:"updated"`
-	CreatedBy   string    `json:"createdBy,omitempty"`
-	UpdatedBy   string    `json:"updatedBy,omitempty"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`        // Secret key name (e.g., "API_KEY")
+	SecretType    string    `json:"type"`        // environment, variable, file
+	Target        string    `json:"target"`      // Projection target
+	Scope         string    `json:"scope"`       // user, grove, runtime_broker
+	ScopeID       string    `json:"scopeId"`     // ID of the scoped entity
+	Description   string    `json:"description,omitempty"`
+	InjectionMode string    `json:"injectionMode,omitempty"` // "always" or "as_needed"
+	SecretRef     string    `json:"secretRef,omitempty"`     // External reference (e.g., GCP SM resource path)
+	Version       int       `json:"version"`
+	Created       time.Time `json:"created"`
+	Updated       time.Time `json:"updated"`
+	CreatedBy     string    `json:"createdBy,omitempty"`
+	UpdatedBy     string    `json:"updatedBy,omitempty"`
 }
 
 // SecretWithValue embeds SecretMeta and adds the plaintext secret value.
@@ -75,16 +76,17 @@ type SecretWithValue struct {
 
 // SetSecretInput provides the data needed to create or update a secret.
 type SetSecretInput struct {
-	Name        string // Secret key name
-	Value       string // Plaintext secret value
-	SecretType  string // environment, variable, file
-	Target      string // Projection target
-	Scope       string // user, grove, runtime_broker
-	ScopeID     string // ID of the scoped entity
-	Description string // Optional description
-	CreatedBy   string // User ID of creator (for new secrets)
-	UpdatedBy   string // User ID of updater
-	UserEmail   string // Email of the user (for labeling user-scoped secrets)
+	Name          string // Secret key name
+	Value         string // Plaintext secret value
+	SecretType    string // environment, variable, file
+	Target        string // Projection target
+	Scope         string // user, grove, runtime_broker
+	ScopeID       string // ID of the scoped entity
+	Description   string // Optional description
+	InjectionMode string // "always" or "as_needed"
+	CreatedBy     string // User ID of creator (for new secrets)
+	UpdatedBy     string // User ID of updater
+	UserEmail     string // Email of the user (for labeling user-scoped secrets)
 }
 
 // SecretBackend defines the interface for secret storage operations.

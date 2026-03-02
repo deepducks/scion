@@ -273,18 +273,19 @@ type EnvVar struct {
 // Secret represents secret metadata from the Hub API.
 // Note: Secret values are never returned by the API.
 type Secret struct {
-	ID          string    `json:"id"`
-	Key         string    `json:"key"`
-	SecretType  string    `json:"type"`
-	Target      string    `json:"target,omitempty"`
-	Scope       string    `json:"scope"`
-	ScopeID     string    `json:"scopeId"`
-	Description string    `json:"description,omitempty"`
-	Version     int       `json:"version"`
-	Created     time.Time `json:"created"`
-	Updated     time.Time `json:"updated"`
-	CreatedBy   string    `json:"createdBy,omitempty"`
-	UpdatedBy   string    `json:"updatedBy,omitempty"`
+	ID            string    `json:"id"`
+	Key           string    `json:"key"`
+	SecretType    string    `json:"type"`
+	Target        string    `json:"target,omitempty"`
+	Scope         string    `json:"scope"`
+	ScopeID       string    `json:"scopeId"`
+	Description   string    `json:"description,omitempty"`
+	InjectionMode string    `json:"injectionMode,omitempty"`
+	Version       int       `json:"version"`
+	Created       time.Time `json:"created"`
+	Updated       time.Time `json:"updated"`
+	CreatedBy     string    `json:"createdBy,omitempty"`
+	UpdatedBy     string    `json:"updatedBy,omitempty"`
 }
 
 // HarnessConfig represents a harness config from the Hub API.

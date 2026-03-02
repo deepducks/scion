@@ -4407,15 +4407,16 @@ func (s *Server) setEnvVar(w http.ResponseWriter, r *http.Request, key string) {
 		}
 
 		input := &secret.SetSecretInput{
-			Name:        key,
-			Value:       req.Value,
-			SecretType:  "environment",
-			Target:      key,
-			Scope:       scope,
-			ScopeID:     scopeID,
-			Description: req.Description,
-			CreatedBy:   createdBy,
-			UpdatedBy:   createdBy,
+			Name:          key,
+			Value:         req.Value,
+			SecretType:    "environment",
+			Target:        key,
+			Scope:         scope,
+			ScopeID:       scopeID,
+			Description:   req.Description,
+			InjectionMode: req.InjectionMode,
+			CreatedBy:     createdBy,
+			UpdatedBy:     createdBy,
 		}
 		created, meta, err := s.secretBackend.Set(ctx, input)
 		if err != nil {
@@ -4526,12 +4527,13 @@ type ListSecretsResponse struct {
 }
 
 type SetSecretRequest struct {
-	Value       string `json:"value"`
-	Scope       string `json:"scope,omitempty"`
-	ScopeID     string `json:"scopeId,omitempty"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type,omitempty"`   // environment (default), variable, file
-	Target      string `json:"target,omitempty"` // Projection target (defaults to key)
+	Value         string `json:"value"`
+	Scope         string `json:"scope,omitempty"`
+	ScopeID       string `json:"scopeId,omitempty"`
+	Description   string `json:"description,omitempty"`
+	InjectionMode string `json:"injectionMode,omitempty"` // "always" or "as_needed" (default: as_needed)
+	Type          string `json:"type,omitempty"`           // environment (default), variable, file
+	Target        string `json:"target,omitempty"`         // Projection target (defaults to key)
 }
 
 type SetSecretResponse struct {
@@ -4542,18 +4544,19 @@ type SetSecretResponse struct {
 // metaToStoreSecret converts a secret.SecretMeta to a store.Secret for API response compatibility.
 func metaToStoreSecret(m secret.SecretMeta) store.Secret {
 	return store.Secret{
-		ID:          m.ID,
-		Key:         m.Name,
-		SecretType:  m.SecretType,
-		Target:      m.Target,
-		Scope:       m.Scope,
-		ScopeID:     m.ScopeID,
-		Description: m.Description,
-		Version:     m.Version,
-		Created:     m.Created,
-		Updated:     m.Updated,
-		CreatedBy:   m.CreatedBy,
-		UpdatedBy:   m.UpdatedBy,
+		ID:            m.ID,
+		Key:           m.Name,
+		SecretType:    m.SecretType,
+		Target:        m.Target,
+		Scope:         m.Scope,
+		ScopeID:       m.ScopeID,
+		Description:   m.Description,
+		InjectionMode: m.InjectionMode,
+		Version:       m.Version,
+		Created:       m.Created,
+		Updated:       m.Updated,
+		CreatedBy:     m.CreatedBy,
+		UpdatedBy:     m.UpdatedBy,
 	}
 }
 
@@ -4730,13 +4733,14 @@ func (s *Server) setSecret(w http.ResponseWriter, r *http.Request, key string) {
 	}
 
 	input := &secret.SetSecretInput{
-		Name:        key,
-		Value:       req.Value,
-		SecretType:  secretType,
-		Target:      target,
-		Scope:       scope,
-		ScopeID:     scopeID,
-		Description: req.Description,
+		Name:          key,
+		Value:         req.Value,
+		SecretType:    secretType,
+		Target:        target,
+		Scope:         scope,
+		ScopeID:       scopeID,
+		Description:   req.Description,
+		InjectionMode: req.InjectionMode,
 	}
 
 	// Populate CreatedBy/UpdatedBy from authenticated user
@@ -4974,15 +4978,16 @@ func (s *Server) handleGroveEnvVarByKey(w http.ResponseWriter, r *http.Request, 
 				return
 			}
 			input := &secret.SetSecretInput{
-				Name:        key,
-				Value:       req.Value,
-				SecretType:  "environment",
-				Target:      key,
-				Scope:       store.ScopeGrove,
-				ScopeID:     groveID,
-				Description: req.Description,
-				CreatedBy:   createdBy,
-				UpdatedBy:   createdBy,
+				Name:          key,
+				Value:         req.Value,
+				SecretType:    "environment",
+				Target:        key,
+				Scope:         store.ScopeGrove,
+				ScopeID:       groveID,
+				Description:   req.Description,
+				InjectionMode: req.InjectionMode,
+				CreatedBy:     createdBy,
+				UpdatedBy:     createdBy,
 			}
 			created, meta, err := s.secretBackend.Set(ctx, input)
 			if err != nil {
@@ -5211,13 +5216,14 @@ func (s *Server) handleGroveSecretByKey(w http.ResponseWriter, r *http.Request, 
 			}
 		}
 		input := &secret.SetSecretInput{
-			Name:        key,
-			Value:       req.Value,
-			SecretType:  secretType,
-			Target:      target,
-			Scope:       store.ScopeGrove,
-			ScopeID:     groveID,
-			Description: req.Description,
+			Name:          key,
+			Value:         req.Value,
+			SecretType:    secretType,
+			Target:        target,
+			Scope:         store.ScopeGrove,
+			ScopeID:       groveID,
+			Description:   req.Description,
+			InjectionMode: req.InjectionMode,
 		}
 		if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
 			input.CreatedBy = userIdent.ID()
@@ -5606,15 +5612,16 @@ func (s *Server) handleBrokerEnvVarByKey(w http.ResponseWriter, r *http.Request,
 				return
 			}
 			input := &secret.SetSecretInput{
-				Name:        key,
-				Value:       req.Value,
-				SecretType:  "environment",
-				Target:      key,
-				Scope:       store.ScopeRuntimeBroker,
-				ScopeID:     brokerID,
-				Description: req.Description,
-				CreatedBy:   createdBy,
-				UpdatedBy:   createdBy,
+				Name:          key,
+				Value:         req.Value,
+				SecretType:    "environment",
+				Target:        key,
+				Scope:         store.ScopeRuntimeBroker,
+				ScopeID:       brokerID,
+				Description:   req.Description,
+				InjectionMode: req.InjectionMode,
+				CreatedBy:     createdBy,
+				UpdatedBy:     createdBy,
 			}
 			created, meta, err := s.secretBackend.Set(ctx, input)
 			if err != nil {
@@ -5834,13 +5841,14 @@ func (s *Server) handleBrokerSecretByKey(w http.ResponseWriter, r *http.Request,
 			}
 		}
 		input := &secret.SetSecretInput{
-			Name:        key,
-			Value:       req.Value,
-			SecretType:  secretType,
-			Target:      target,
-			Scope:       store.ScopeRuntimeBroker,
-			ScopeID:     brokerID,
-			Description: req.Description,
+			Name:          key,
+			Value:         req.Value,
+			SecretType:    secretType,
+			Target:        target,
+			Scope:         store.ScopeRuntimeBroker,
+			ScopeID:       brokerID,
+			Description:   req.Description,
+			InjectionMode: req.InjectionMode,
 		}
 		if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
 			input.CreatedBy = userIdent.ID()

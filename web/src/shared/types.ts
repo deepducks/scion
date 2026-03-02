@@ -279,6 +279,7 @@ export interface Secret {
   scope: ResourceScope;
   scopeId: string;
   description?: string;
+  injectionMode: InjectionMode;
   version: number;
   created: string;
   updated: string;

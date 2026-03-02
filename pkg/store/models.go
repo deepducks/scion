@@ -580,8 +580,9 @@ type Secret struct {
 	ScopeID string `json:"scopeId"` // ID of the scoped entity
 
 	// Metadata
-	Description string `json:"description,omitempty"` // Optional description
-	Version     int    `json:"version"`               // Incremented on each update
+	Description   string `json:"description,omitempty"`   // Optional description
+	InjectionMode string `json:"injectionMode,omitempty"` // "always" or "as_needed" (default: as_needed)
+	Version       int    `json:"version"`                 // Incremented on each update
 
 	// Timestamps
 	Created time.Time `json:"created"`
