@@ -385,7 +385,7 @@ export class ScionNav extends LitElement {
                   <span class="maintenance-toggle-label">Maintenance</span>
                   <button
                     class="toggle-track ${this.maintenanceEnabled ? 'active' : ''}"
-                    @click=${(): void => this.toggleMaintenance()}
+                    @click=${() => { this.toggleMaintenance(); }}
                     aria-label="Toggle maintenance mode"
                   >
                     <span class="toggle-knob"></span>

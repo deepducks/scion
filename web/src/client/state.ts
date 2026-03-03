@@ -255,9 +255,11 @@ export class StateManager extends EventTarget {
       const delta = data as Partial<Agent>;
       // Preserve sticky activities: if the incoming activity is idle/empty
       // but the existing activity is sticky, keep the existing value.
+      const incomingActivity = delta.activity as string | undefined;
       if (
-        delta.activity !== undefined &&
-        (delta.activity === 'idle' || delta.activity === '') &&
+        incomingActivity !== undefined &&
+        (incomingActivity === 'idle' || incomingActivity === '') &&
+        existing.activity &&
         STICKY_ACTIVITIES.has(existing.activity)
       ) {
         delete delta.activity;
