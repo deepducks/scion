@@ -369,6 +369,10 @@ export class ScionNotificationTray extends LitElement {
       line-height: 1.4;
       color: var(--scion-text, #1e293b);
       word-break: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
 
     .notif-meta {
@@ -389,36 +393,18 @@ export class ScionNotificationTray extends LitElement {
       text-decoration: underline;
     }
 
-    .notif-actions {
-      flex-shrink: 0;
-      display: flex;
-      align-items: flex-start;
-      padding-top: 2px;
-    }
-
-    .ack-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.5rem;
-      height: 1.5rem;
+    .mark-read-link {
       border: none;
-      border-radius: 0.25rem;
       background: transparent;
       color: var(--scion-text-muted, #64748b);
+      font-size: 0.6875rem;
       cursor: pointer;
-      transition:
-        background 0.15s ease,
-        color 0.15s ease;
+      padding: 0;
+      transition: color 0.15s ease;
     }
 
-    .ack-btn:hover {
-      background: var(--scion-bg-subtle, #f1f5f9);
-      color: var(--scion-text, #1e293b);
-    }
-
-    .ack-btn sl-icon {
-      font-size: 0.75rem;
+    .mark-read-link:hover {
+      color: var(--scion-primary, #3b82f6);
     }
 
     /* Empty state */
@@ -508,23 +494,21 @@ export class ScionNotificationTray extends LitElement {
           <sl-icon name=${this.statusIcon(n.status)}></sl-icon>
         </div>
         <div class="notif-body">
-          <div class="notif-message">${n.message}</div>
+          <sl-tooltip content=${n.message} hoist>
+            <div class="notif-message">${n.message}</div>
+          </sl-tooltip>
           <div class="notif-meta">
             <span>${this.relativeTime(n.createdAt)}</span>
             <a href="/agents/${n.agentId}" @click=${(e: Event): void => this.navigateToAgent(e, n.agentId)}>
               View agent
             </a>
+            <button
+              class="mark-read-link"
+              @click=${(): void => void this.ackOne(n.id)}
+            >
+              Mark read
+            </button>
           </div>
-        </div>
-        <div class="notif-actions">
-          <button
-            class="ack-btn"
-            @click=${(): void => void this.ackOne(n.id)}
-            aria-label="Dismiss notification"
-            title="Dismiss"
-          >
-            <sl-icon name="check2"></sl-icon>
-          </button>
         </div>
       </div>
     `;
