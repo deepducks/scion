@@ -87,6 +87,8 @@ func (b *LocalBackend) Resolve(ctx context.Context, userID, groveID, brokerID st
 	}
 
 	var scopes []scopeEntry
+	// Hub scope is always included as lowest precedence
+	scopes = append(scopes, scopeEntry{scope: store.ScopeHub, scopeID: store.ScopeIDHub})
 	if userID != "" {
 		scopes = append(scopes, scopeEntry{scope: store.ScopeUser, scopeID: userID})
 	}

@@ -270,6 +270,130 @@ func TestResolveSecrets_NoOwner(t *testing.T) {
 	}
 }
 
+func TestResolveSecrets_HubScope(t *testing.T) {
+	memStore := createTestStore(t)
+	ctx := context.Background()
+
+	// Create hub-scoped secrets
+	hubSecret := &store.Secret{
+		ID:             "sh1",
+		Key:            "ORG_API_KEY",
+		EncryptedValue: "hub-org-api-key",
+		SecretType:     store.SecretTypeEnvironment,
+		Target:         "ORG_API_KEY",
+		Scope:          store.ScopeHub,
+		ScopeID:        store.ScopeIDHub,
+	}
+	// Create a hub secret that will be overridden by user scope
+	hubOverridden := &store.Secret{
+		ID:             "sh2",
+		Key:            "API_KEY",
+		EncryptedValue: "hub-default-api-key",
+		SecretType:     store.SecretTypeEnvironment,
+		Target:         "API_KEY",
+		Scope:          store.ScopeHub,
+		ScopeID:        store.ScopeIDHub,
+	}
+	// Create user secret that overrides hub
+	userSecret := &store.Secret{
+		ID:             "su1",
+		Key:            "API_KEY",
+		EncryptedValue: "user-personal-api-key",
+		SecretType:     store.SecretTypeEnvironment,
+		Target:         "API_KEY",
+		Scope:          store.ScopeUser,
+		ScopeID:        "user-1",
+	}
+	// Create a hub secret overridden by grove scope
+	hubGroveOverridden := &store.Secret{
+		ID:             "sh3",
+		Key:            "DB_PASS",
+		EncryptedValue: "hub-default-db-pass",
+		SecretType:     store.SecretTypeEnvironment,
+		Target:         "DB_PASS",
+		Scope:          store.ScopeHub,
+		ScopeID:        store.ScopeIDHub,
+	}
+	groveSecret := &store.Secret{
+		ID:             "sg1",
+		Key:            "DB_PASS",
+		EncryptedValue: "grove-db-pass",
+		SecretType:     store.SecretTypeEnvironment,
+		Target:         "DB_PASS",
+		Scope:          store.ScopeGrove,
+		ScopeID:        "grove-1",
+	}
+
+	for _, s := range []*store.Secret{hubSecret, hubOverridden, userSecret, hubGroveOverridden, groveSecret} {
+		if err := memStore.CreateSecret(ctx, s); err != nil {
+			t.Fatalf("failed to create test secret %s (scope=%s): %v", s.Key, s.Scope, err)
+		}
+	}
+
+	backend := secret.NewLocalBackend(memStore)
+	mockClient := &mockRuntimeBrokerClient{}
+	dispatcher := NewHTTPAgentDispatcherWithClient(memStore, mockClient, false, slog.Default())
+	dispatcher.SetSecretBackend(backend)
+
+	agent := &store.Agent{
+		ID:      "agent-hub-1",
+		Name:    "hub-test-agent",
+		OwnerID: "user-1",
+		GroveID: "grove-1",
+	}
+
+	resolved, err := dispatcher.resolveSecrets(ctx, agent)
+	if err != nil {
+		t.Fatalf("resolveSecrets failed: %v", err)
+	}
+
+	byName := make(map[string]ResolvedSecret)
+	for _, rs := range resolved {
+		byName[rs.Name] = rs
+	}
+
+	// ORG_API_KEY should come from hub scope (no override)
+	orgKey, ok := byName["ORG_API_KEY"]
+	if !ok {
+		t.Fatal("expected ORG_API_KEY in resolved secrets")
+	}
+	if orgKey.Value != "hub-org-api-key" {
+		t.Errorf("expected ORG_API_KEY value %q, got %q", "hub-org-api-key", orgKey.Value)
+	}
+	if orgKey.Source != store.ScopeHub {
+		t.Errorf("expected ORG_API_KEY source %q, got %q", store.ScopeHub, orgKey.Source)
+	}
+
+	// API_KEY should be overridden by user scope
+	apiKey, ok := byName["API_KEY"]
+	if !ok {
+		t.Fatal("expected API_KEY in resolved secrets")
+	}
+	if apiKey.Value != "user-personal-api-key" {
+		t.Errorf("expected API_KEY value %q, got %q", "user-personal-api-key", apiKey.Value)
+	}
+	if apiKey.Source != store.ScopeUser {
+		t.Errorf("expected API_KEY source %q, got %q", store.ScopeUser, apiKey.Source)
+	}
+
+	// DB_PASS should be overridden by grove scope
+	dbPass, ok := byName["DB_PASS"]
+	if !ok {
+		t.Fatal("expected DB_PASS in resolved secrets")
+	}
+	if dbPass.Value != "grove-db-pass" {
+		t.Errorf("expected DB_PASS value %q, got %q", "grove-db-pass", dbPass.Value)
+	}
+	if dbPass.Source != store.ScopeGrove {
+		t.Errorf("expected DB_PASS source %q, got %q", store.ScopeGrove, dbPass.Source)
+	}
+
+	// Total: ORG_API_KEY, API_KEY, DB_PASS = 3
+	if len(resolved) != 3 {
+		t.Errorf("expected 3 resolved secrets, got %d", len(resolved))
+	}
+}
+
 func TestResolveSecrets_NoBackend(t *testing.T) {
 	memStore := createTestStore(t)
 	ctx := context.Background()

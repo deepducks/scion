@@ -602,11 +602,16 @@ const (
 
 // Scope constants for environment variables and secrets.
 const (
-	ScopeHub         = "hub"
-	ScopeUser        = "user"
-	ScopeGrove       = "grove"
+	ScopeHub           = "hub"
+	ScopeUser          = "user"
+	ScopeGrove         = "grove"
 	ScopeRuntimeBroker = "runtime_broker"
 )
+
+// ScopeIDHub is the well-known scope ID for hub-scoped env vars and secrets.
+// Since there is exactly one hub, this constant is used as a fixed sentinel
+// (analogous to how user scope uses the user's ID).
+const ScopeIDHub = "hub"
 
 // InjectionMode constants for environment variables.
 const (

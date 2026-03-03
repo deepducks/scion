@@ -4228,6 +4228,22 @@ func (s *Server) resolveEnvSecretAccess(w http.ResponseWriter, r *http.Request, 
 		Forbidden(w)
 		return "", false
 
+	case store.ScopeHub:
+		// Hub scope: any authenticated identity can read, only admin users can write.
+		identity := GetIdentityFromContext(ctx)
+		if identity == nil {
+			Unauthorized(w)
+			return "", false
+		}
+		if isWrite {
+			userIdent, ok := identity.(UserIdentity)
+			if !ok || userIdent.Role() != store.UserRoleAdmin {
+				Forbidden(w)
+				return "", false
+			}
+		}
+		return store.ScopeIDHub, true
+
 	default:
 		BadRequest(w, "invalid scope: "+scope)
 		return "", false

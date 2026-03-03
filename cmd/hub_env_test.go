@@ -407,3 +407,95 @@ func TestResolveEnvScope_ExplicitGroveValue(t *testing.T) {
 	assert.Equal(t, "grove", scope)
 	assert.Equal(t, "hub-local", scopeID, "should pass through the explicit grove name for later resolution")
 }
+
+func TestResolveEnvScope_HubFlag(t *testing.T) {
+	orig := saveEnvTestState()
+	defer orig.restore()
+
+	testCmd := &cobra.Command{Use: "test"}
+	testCmd.Flags().BoolVar(&envHubScope, "hub", false, "")
+	testCmd.Flags().StringVar(&envGroveScope, "grove", "", "")
+	testCmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
+	testCmd.Flags().StringVar(&envBrokerScope, "broker", "", "")
+	testCmd.Flags().Lookup("broker").NoOptDefVal = scopeInferSentinel
+
+	// Set --hub
+	testCmd.Flags().Set("hub", "true")
+
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	groveDir := setupEnvGrove(t, tmpHome, "http://localhost:9999")
+	grovePath = groveDir
+
+	settings, err := config.LoadSettings(groveDir)
+	require.NoError(t, err)
+
+	scope, scopeID, err := resolveEnvScope(testCmd, settings)
+	assert.NoError(t, err)
+	assert.Equal(t, "hub", scope)
+	assert.Equal(t, "", scopeID, "hub scope should return empty scopeID (server resolves it)")
+}
+
+func TestResolveEnvScope_HubConflictsWithGrove(t *testing.T) {
+	orig := saveEnvTestState()
+	defer orig.restore()
+
+	testCmd := &cobra.Command{Use: "test"}
+	testCmd.Flags().BoolVar(&envHubScope, "hub", false, "")
+	testCmd.Flags().StringVar(&envGroveScope, "grove", "", "")
+	testCmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
+	testCmd.Flags().StringVar(&envBrokerScope, "broker", "", "")
+	testCmd.Flags().Lookup("broker").NoOptDefVal = scopeInferSentinel
+
+	// Set both --hub and --grove
+	testCmd.Flags().Set("hub", "true")
+	testCmd.Flags().Set("grove", "some-grove")
+
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	groveDir := setupEnvGrove(t, tmpHome, "http://localhost:9999")
+	grovePath = groveDir
+
+	settings, err := config.LoadSettings(groveDir)
+	require.NoError(t, err)
+
+	_, _, err = resolveEnvScope(testCmd, settings)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot specify more than one")
+}
+
+func TestResolveEnvScope_HubConflictsWithBroker(t *testing.T) {
+	orig := saveEnvTestState()
+	defer orig.restore()
+
+	testCmd := &cobra.Command{Use: "test"}
+	testCmd.Flags().BoolVar(&envHubScope, "hub", false, "")
+	testCmd.Flags().StringVar(&envGroveScope, "grove", "", "")
+	testCmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
+	testCmd.Flags().StringVar(&envBrokerScope, "broker", "", "")
+	testCmd.Flags().Lookup("broker").NoOptDefVal = scopeInferSentinel
+
+	// Set both --hub and --broker
+	testCmd.Flags().Set("hub", "true")
+	testCmd.Flags().Set("broker", "some-broker")
+
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	groveDir := setupEnvGrove(t, tmpHome, "http://localhost:9999")
+	grovePath = groveDir
+
+	settings, err := config.LoadSettings(groveDir)
+	require.NoError(t, err)
+
+	_, _, err = resolveEnvScope(testCmd, settings)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot specify more than one")
+}
+
+func TestHubEnvListCmd_HubFlag(t *testing.T) {
+	// Verify the --hub flag is registered on all env subcommands.
+	for _, cmd := range []*cobra.Command{hubEnvSetCmd, hubEnvGetCmd, hubEnvListCmd, hubEnvClearCmd} {
+		f := cmd.Flags().Lookup("hub")
+		assert.NotNil(t, f, "%s command should have --hub flag", cmd.Use)
+	}
+}

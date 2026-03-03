@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ptone/scion-agent/pkg/config"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -199,4 +201,96 @@ func TestRunSecretList_JSON(t *testing.T) {
 
 	err := runSecretList(hubSecretListCmd, nil)
 	assert.NoError(t, err)
+}
+
+func TestResolveSecretScope_HubFlag(t *testing.T) {
+	orig := saveSecretTestState()
+	defer orig.restore()
+
+	testCmd := &cobra.Command{Use: "test"}
+	testCmd.Flags().BoolVar(&secretHubScope, "hub", false, "")
+	testCmd.Flags().StringVar(&secretGroveScope, "grove", "", "")
+	testCmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
+	testCmd.Flags().StringVar(&secretBrokerScope, "broker", "", "")
+	testCmd.Flags().Lookup("broker").NoOptDefVal = scopeInferSentinel
+
+	// Set --hub
+	testCmd.Flags().Set("hub", "true")
+
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	groveDir := setupSecretGrove(t, tmpHome, "http://localhost:9999")
+	grovePath = groveDir
+
+	settings, err := config.LoadSettings(groveDir)
+	require.NoError(t, err)
+
+	scope, scopeID, err := resolveSecretScope(testCmd, settings)
+	assert.NoError(t, err)
+	assert.Equal(t, "hub", scope)
+	assert.Equal(t, "", scopeID, "hub scope should return empty scopeID (server resolves it)")
+}
+
+func TestResolveSecretScope_HubConflictsWithGrove(t *testing.T) {
+	orig := saveSecretTestState()
+	defer orig.restore()
+
+	testCmd := &cobra.Command{Use: "test"}
+	testCmd.Flags().BoolVar(&secretHubScope, "hub", false, "")
+	testCmd.Flags().StringVar(&secretGroveScope, "grove", "", "")
+	testCmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
+	testCmd.Flags().StringVar(&secretBrokerScope, "broker", "", "")
+	testCmd.Flags().Lookup("broker").NoOptDefVal = scopeInferSentinel
+
+	// Set both --hub and --grove
+	testCmd.Flags().Set("hub", "true")
+	testCmd.Flags().Set("grove", "some-grove")
+
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	groveDir := setupSecretGrove(t, tmpHome, "http://localhost:9999")
+	grovePath = groveDir
+
+	settings, err := config.LoadSettings(groveDir)
+	require.NoError(t, err)
+
+	_, _, err = resolveSecretScope(testCmd, settings)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot specify more than one")
+}
+
+func TestResolveSecretScope_HubConflictsWithBroker(t *testing.T) {
+	orig := saveSecretTestState()
+	defer orig.restore()
+
+	testCmd := &cobra.Command{Use: "test"}
+	testCmd.Flags().BoolVar(&secretHubScope, "hub", false, "")
+	testCmd.Flags().StringVar(&secretGroveScope, "grove", "", "")
+	testCmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
+	testCmd.Flags().StringVar(&secretBrokerScope, "broker", "", "")
+	testCmd.Flags().Lookup("broker").NoOptDefVal = scopeInferSentinel
+
+	// Set both --hub and --broker
+	testCmd.Flags().Set("hub", "true")
+	testCmd.Flags().Set("broker", "some-broker")
+
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	groveDir := setupSecretGrove(t, tmpHome, "http://localhost:9999")
+	grovePath = groveDir
+
+	settings, err := config.LoadSettings(groveDir)
+	require.NoError(t, err)
+
+	_, _, err = resolveSecretScope(testCmd, settings)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot specify more than one")
+}
+
+func TestHubSecretListCmd_HubFlag(t *testing.T) {
+	// Verify the --hub flag is registered on all secret subcommands.
+	for _, cmd := range []*cobra.Command{hubSecretSetCmd, hubSecretGetCmd, hubSecretListCmd, hubSecretClearCmd} {
+		f := cmd.Flags().Lookup("hub")
+		assert.NotNil(t, f, "%s command should have --hub flag", cmd.Use)
+	}
 }

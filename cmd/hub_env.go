@@ -35,6 +35,7 @@ const scopeInferSentinel = "\x00"
 var (
 	envGroveScope  string
 	envBrokerScope string
+	envHubScope    bool
 	envOutputJSON  bool
 	envAlways      bool
 	envAsNeeded    bool
@@ -48,12 +49,13 @@ var hubEnvCmd = &cobra.Command{
 	Long: `Manage environment variables stored in the Hub.
 
 Environment variables can be scoped to:
+  - Hub: Available to all agents across the entire hub (admin-only writes)
   - User (default): Available to all your agents
   - Grove: Available to agents in a specific grove
   - Broker: Available to agents running on a specific broker
 
 Variables are resolved hierarchically when an agent starts:
-  user -> grove -> broker -> agent config
+  hub -> user -> grove -> broker -> agent config
 
 Examples:
   # Set a user-scoped variable (two formats)
@@ -158,6 +160,7 @@ func init() {
 	// NoOptDefVal allows bare --grove/--broker (no value) to infer from settings,
 	// while --grove=<name> or --broker=<name> accepts an explicit name or ID.
 	for _, cmd := range []*cobra.Command{hubEnvSetCmd, hubEnvGetCmd, hubEnvListCmd, hubEnvClearCmd} {
+		cmd.Flags().BoolVar(&envHubScope, "hub", false, "Hub scope (applies to all agents hub-wide, admin-only writes)")
 		cmd.Flags().StringVar(&envGroveScope, "grove", "", "Grove scope (bare flag infers current grove, or use --grove=<name|id>)")
 		cmd.Flags().Lookup("grove").NoOptDefVal = scopeInferSentinel
 		cmd.Flags().StringVar(&envBrokerScope, "broker", "", "Broker scope (bare flag infers current broker, or use --broker=<name|id>)")
@@ -178,11 +181,27 @@ func init() {
 // When a value is provided, it is returned as-is and may need further resolution
 // (name/slug to UUID) via resolveScopeID.
 func resolveEnvScope(cmd *cobra.Command, settings *config.Settings) (scope, scopeID string, err error) {
+	hubSet := cmd.Flags().Changed("hub")
 	groveSet := cmd.Flags().Changed("grove")
 	brokerSet := cmd.Flags().Changed("broker")
 
-	if groveSet && brokerSet {
-		return "", "", fmt.Errorf("cannot specify both --grove and --broker")
+	// Enforce mutual exclusivity
+	setCount := 0
+	if hubSet {
+		setCount++
+	}
+	if groveSet {
+		setCount++
+	}
+	if brokerSet {
+		setCount++
+	}
+	if setCount > 1 {
+		return "", "", fmt.Errorf("cannot specify more than one of --hub, --grove, and --broker")
+	}
+
+	if hubSet {
+		return "hub", "", nil
 	}
 
 	if groveSet {

@@ -1142,3 +1142,265 @@ func TestEnvVar_GroveScope_FallbackDelete(t *testing.T) {
 		t.Errorf("expected 204 for grove fallback delete, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// ============================================================================
+// Hub-Scoped Env Var Authorization Tests
+// ============================================================================
+
+func TestEnvVar_HubScope_AdminCanSetAndGet(t *testing.T) {
+	srv, _ := testServer(t)
+
+	// Admin (dev-user) should be able to set hub-scoped env vars
+	body := SetEnvVarRequest{Value: "hub-value", Description: "Hub-wide default", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/env/HUB_VAR", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin hub scope write, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var setResp SetEnvVarResponse
+	if err := json.NewDecoder(rec.Body).Decode(&setResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !setResp.Created {
+		t.Error("expected created=true for new hub env var")
+	}
+
+	// Admin should be able to get hub-scoped env vars
+	rec2 := doRequest(t, srv, http.MethodGet, "/api/v1/env/HUB_VAR?scope=hub", nil)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for admin hub scope read, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestEnvVar_HubScope_AdminCanList(t *testing.T) {
+	srv, _ := testServer(t)
+
+	// Set a hub-scoped env var first
+	body := SetEnvVarRequest{Value: "hub-list-val", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/env/HUB_LIST_VAR", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// List hub-scoped env vars
+	rec2 := doRequest(t, srv, http.MethodGet, "/api/v1/env?scope=hub", nil)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for admin hub scope list, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+
+	var resp ListEnvVarsResponse
+	if err := json.NewDecoder(rec2.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.ScopeID != store.ScopeIDHub {
+		t.Errorf("expected scopeId %q, got %q", store.ScopeIDHub, resp.ScopeID)
+	}
+}
+
+func TestEnvVar_HubScope_AdminCanDelete(t *testing.T) {
+	srv, _ := testServer(t)
+
+	// Create then delete a hub-scoped env var
+	body := SetEnvVarRequest{Value: "to-delete", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/env/HUB_DEL_VAR", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec2 := doRequest(t, srv, http.MethodDelete, "/api/v1/env/HUB_DEL_VAR?scope=hub", nil)
+	if rec2.Code != http.StatusNoContent {
+		t.Errorf("expected 204 for hub scope delete, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestEnvVar_HubScope_MemberCanRead(t *testing.T) {
+	srv, s := testServer(t)
+	ctx := context.Background()
+
+	member := &store.User{
+		ID: "hub-env-member-1", Email: "hub-member@example.com", DisplayName: "Hub Member",
+		Role: store.UserRoleMember, Status: "active", Created: time.Now(),
+	}
+	if err := s.CreateUser(ctx, member); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Admin creates a hub env var
+	body := SetEnvVarRequest{Value: "hub-shared", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/env/HUB_SHARED", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Non-admin member should be able to read hub-scoped env vars
+	rec2 := doRequestAsUser(t, srv, member, http.MethodGet, "/api/v1/env?scope=hub", nil)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for member hub scope read, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestEnvVar_HubScope_MemberWriteForbidden(t *testing.T) {
+	srv, s := testServer(t)
+	ctx := context.Background()
+
+	member := &store.User{
+		ID: "hub-env-member-2", Email: "hub-member2@example.com", DisplayName: "Hub Member 2",
+		Role: store.UserRoleMember, Status: "active", Created: time.Now(),
+	}
+	if err := s.CreateUser(ctx, member); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Non-admin member should be forbidden from writing hub-scoped env vars
+	body := SetEnvVarRequest{Value: "should-fail", Scope: "hub"}
+	rec := doRequestAsUser(t, srv, member, http.MethodPut, "/api/v1/env/HUB_FAIL", body)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for member hub scope write, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestEnvVar_HubScope_MemberDeleteForbidden(t *testing.T) {
+	srv, s := testServer(t)
+	ctx := context.Background()
+
+	member := &store.User{
+		ID: "hub-env-member-3", Email: "hub-member3@example.com", DisplayName: "Hub Member 3",
+		Role: store.UserRoleMember, Status: "active", Created: time.Now(),
+	}
+	if err := s.CreateUser(ctx, member); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Admin creates a hub env var
+	body := SetEnvVarRequest{Value: "hub-owned", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/env/HUB_OWNED", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Non-admin member should be forbidden from deleting hub-scoped env vars
+	rec2 := doRequestAsUser(t, srv, member, http.MethodDelete, "/api/v1/env/HUB_OWNED?scope=hub", nil)
+	if rec2.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for member hub scope delete, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestEnvVar_HubScope_AgentCanRead(t *testing.T) {
+	srv, s := testServer(t)
+	ctx := context.Background()
+
+	grove := &store.Grove{
+		ID: "grove_hub_agent", Name: "Hub Agent Grove", Slug: "hub-agent-grove",
+		Created: time.Now(), Updated: time.Now(),
+	}
+	if err := s.CreateGrove(ctx, grove); err != nil {
+		t.Fatalf("failed to create grove: %v", err)
+	}
+
+	agent := &store.Agent{
+		ID: "agent_hub_read", Slug: "hub-read-agent", Name: "Hub Read Agent",
+		GroveID: grove.ID, Phase: string(state.PhaseRunning), StateVersion: 1,
+		Created: time.Now(), Updated: time.Now(),
+	}
+	if err := s.CreateAgent(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	agentToken, err := srv.agentTokenService.GenerateAgentToken(agent.ID, grove.ID, nil)
+	if err != nil {
+		t.Fatalf("failed to generate agent token: %v", err)
+	}
+
+	// Admin creates a hub env var
+	body := SetEnvVarRequest{Value: "hub-agent-val", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/env/HUB_AGENT_VAR", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Agent should be able to read hub-scoped env vars
+	rec2 := doRequestWithAgentToken(t, srv, http.MethodGet, "/api/v1/env?scope=hub", nil, agentToken)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for agent hub scope read, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestEnvVar_HubScope_Unauthenticated(t *testing.T) {
+	srv, _ := testServer(t)
+
+	// Unauthenticated should get 401
+	rec := doRequestNoAuth(t, srv, http.MethodGet, "/api/v1/env?scope=hub", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated hub scope, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ============================================================================
+// Hub-Scoped Secrets Authorization Tests
+// ============================================================================
+
+func TestSecret_HubScope_AdminCanSetAndGet(t *testing.T) {
+	srv, s := testServer(t)
+	srv.SetSecretBackend(secret.NewLocalBackend(s))
+
+	// Admin should be able to set hub-scoped secrets
+	body := SetSecretRequest{Value: "hub-secret-val", Description: "Hub-wide secret", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/secrets/HUB_SECRET", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin hub scope secret write, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Admin should be able to get hub-scoped secret metadata
+	rec2 := doRequest(t, srv, http.MethodGet, "/api/v1/secrets/HUB_SECRET?scope=hub", nil)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for admin hub scope secret read, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestSecret_HubScope_MemberCanRead(t *testing.T) {
+	srv, s := testServer(t)
+	srv.SetSecretBackend(secret.NewLocalBackend(s))
+	ctx := context.Background()
+
+	member := &store.User{
+		ID: "hub-sec-member-1", Email: "hubsecmember@example.com", DisplayName: "Hub Sec Member",
+		Role: store.UserRoleMember, Status: "active", Created: time.Now(),
+	}
+	if err := s.CreateUser(ctx, member); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Admin creates a hub secret
+	body := SetSecretRequest{Value: "hub-shared-secret", Scope: "hub"}
+	rec := doRequest(t, srv, http.MethodPut, "/api/v1/secrets/HUB_SHARED_SEC", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Non-admin member should be able to read hub-scoped secrets
+	rec2 := doRequestAsUser(t, srv, member, http.MethodGet, "/api/v1/secrets?scope=hub", nil)
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for member hub scope secret read, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestSecret_HubScope_MemberWriteForbidden(t *testing.T) {
+	srv, s := testServer(t)
+	srv.SetSecretBackend(secret.NewLocalBackend(s))
+	ctx := context.Background()
+
+	member := &store.User{
+		ID: "hub-sec-member-2", Email: "hubsecmember2@example.com", DisplayName: "Hub Sec Member 2",
+		Role: store.UserRoleMember, Status: "active", Created: time.Now(),
+	}
+	if err := s.CreateUser(ctx, member); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Non-admin member should be forbidden from writing hub-scoped secrets
+	body := SetSecretRequest{Value: "should-fail", Scope: "hub"}
+	rec := doRequestAsUser(t, srv, member, http.MethodPut, "/api/v1/secrets/HUB_FAIL_SEC", body)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for member hub scope secret write, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

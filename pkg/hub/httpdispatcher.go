@@ -885,6 +885,25 @@ func (d *HTTPAgentDispatcher) DispatchFinalizeEnv(ctx context.Context, agent *st
 func (d *HTTPAgentDispatcher) resolveEnvFromStorage(ctx context.Context, agent *store.Agent) (map[string]string, error) {
 	result := make(map[string]string)
 
+	// Query hub-scoped env vars (lowest precedence)
+	vars, err := d.store.ListEnvVars(ctx, store.EnvVarFilter{Scope: store.ScopeHub, ScopeID: store.ScopeIDHub})
+	if err != nil {
+		if d.debug {
+			d.log.Warn("Failed to list hub env vars", "error", err)
+		}
+	} else {
+		if d.debug {
+			keys := make([]string, 0, len(vars))
+			for _, v := range vars {
+				keys = append(keys, v.Key)
+			}
+			d.log.Debug("resolveEnvFromStorage: hub scope", "count", len(vars), "keys", keys)
+		}
+		for _, v := range vars {
+			result[v.Key] = v.Value
+		}
+	}
+
 	// Query grove-scoped env vars
 	if agent.GroveID != "" {
 		vars, err := d.store.ListEnvVars(ctx, store.EnvVarFilter{Scope: "grove", ScopeID: agent.GroveID})
@@ -960,6 +979,16 @@ func (d *HTTPAgentDispatcher) resolveEnvFromStorage(ctx context.Context, agent *
 // buildEnvSources creates a map of env key -> scope for reporting to the CLI.
 func (d *HTTPAgentDispatcher) buildEnvSources(ctx context.Context, agent *store.Agent, resolvedEnv map[string]string) map[string]string {
 	sources := make(map[string]string)
+
+	// Check hub scope (lowest precedence — later scopes override)
+	vars, err := d.store.ListEnvVars(ctx, store.EnvVarFilter{Scope: store.ScopeHub, ScopeID: store.ScopeIDHub})
+	if err == nil {
+		for _, v := range vars {
+			if _, inResolved := resolvedEnv[v.Key]; inResolved {
+				sources[v.Key] = "hub"
+			}
+		}
+	}
 
 	// Check grove scope
 	if agent.GroveID != "" {
