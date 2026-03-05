@@ -101,13 +101,14 @@ The `local` backend rejects all write operations to prevent plaintext secret sto
 
 ### 4.2 Secret Scopes and Resolution
 
-Secrets are scoped and resolved hierarchically when an agent starts:
+Secrets are scoped and resolved hierarchically when an agent starts. The following scopes are merged in order (last one wins for the same key):
 
-1. **User scope** (lowest priority): Personal secrets for the agent's owner.
-2. **Grove scope**: Project-level secrets.
-3. **Runtime Broker scope** (highest priority): Infrastructure-level overrides.
+1. **Hub scope** (lowest priority): Global defaults.
+2. **User scope**: Personal secrets for the agent's owner.
+3. **Grove scope**: Project-level secrets.
+4. **Runtime Broker scope** (highest priority): Infrastructure-level overrides.
 
-Higher-priority scopes override lower ones by key name, producing a merged set of secrets for each agent.
+This produces a merged set of secrets for each agent, where more specific scopes override broader ones.
 
 ### 4.3 Secret Types and Projection
 
@@ -127,8 +128,9 @@ For headless environments (CI/CD, automation), Scion supports **API Keys**.
 ### 4.5 Credentials Propagation
 
 Scion ensures that sensitive credentials (GCP Service Accounts, API keys for LLMs) are propagated into agent containers securely.
-- **Docker / Podman**: Injected via environment variables or read-only volume mounts. Secrets are transmitted over the TLS-secured control channel between Hub and Broker.
+- **Docker / Podman**: Injected via environment variables or read-only bind mounts for file-type secrets. File secrets are written to a temporary directory and mounted into the container at the target path.
 - **Kubernetes**: Propagated via Kubernetes Secrets or Secret Manager CSI drivers (e.g., GCP Secret Manager).
+- **Broker Mode Isolation**: When agents are dispatched via the Hub, the credential pipeline only uses hub-resolved secrets and environment variables. The broker operator's host environment and filesystem are never scanned, preventing credential leakage into hub-dispatched agents.
 - **Isolation**: Agent home directories are isolated on the host filesystem to prevent cross-agent credential leakage.
 - **Lifecycle**: Secrets exist only in the agent container's memory. When an agent is deleted, all projected secrets are purged.
 

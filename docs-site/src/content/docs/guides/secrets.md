@@ -26,7 +26,7 @@ Both variables and secrets can be scoped to different levels. Scion resolves the
 2.  **Grove Scope**: Project-level secrets. Available to all agents running in a specific Grove.
 3.  **Broker Scope**: Infrastructure-level secrets. Available only to agents running on a specific Runtime Broker (e.g., for hardware-specific config).
 
-**Resolution Priority:** User secrets have the highest priority, followed by Grove, then Broker, and finally Template/Agent overrides. Higher-priority scopes override lower ones.
+**Resolution Priority:** When multiple scopes define the same secret key, the more specific scope wins. Broker scope has the highest priority, followed by Grove, then User, then Hub. Template `env` blocks and CLI `--env` flags are layered on top of resolved secrets.
 
 ---
 
@@ -126,12 +126,13 @@ When GCP Secret Manager is configured, Scion uses a **hybrid storage** model:
 ## Technical Details
 
 ### Resolution Hierarchy
-When an agent starts, the Runtime Broker requests a "Resolved Environment" from the Hub. The Hub merges values in this order (last one wins):
-1. Broker Secrets/Env
-2. Grove Secrets/Env
-3. User Secrets/Env
-4. Template `env` block
-5. CLI `--env` flags
+When an agent starts, the Runtime Broker requests a "Resolved Environment" from the Hub. The Hub merges secret values in this order (last one wins for the same key):
+1. Hub Secrets (global defaults)
+2. User Secrets
+3. Grove Secrets
+4. Broker Secrets
+5. Template `env` block
+6. CLI `--env` flags
 
 ### Security
 Secrets are transmitted over TLS between the Hub and Runtime Brokers. They are only decrypted by the Hub during the dispatch process and sent over an encrypted channel to the Runtime Broker. The Broker then injects them directly into the container's memory space. Brokers never persist agent secrets to disk.

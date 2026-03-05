@@ -9,19 +9,20 @@ Scion supports multiple LLM agent "harnesses". A harness is an adapter that allo
 The default harness for interacting with Google's Gemini models via the `gemini` CLI tool.
 
 ### Authentication
-The Gemini harness supports multiple authentication methods:
-- **API Key**: Set `GEMINI_API_KEY` in your environment or Scion settings.
-- **OAuth (Personal)**: Uses `oauth_creds.json` if available.
-- **Google Cloud (Vertex AI)**: Uses Application Default Credentials (ADC) via `gcloud`.
+The Gemini harness supports three authentication methods (auto-detected in this order):
+- **API Key** (`api-key`): Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in your environment.
+- **OAuth** (`auth-file`): Uses `~/.gemini/oauth_creds.json` if available.
+- **Vertex AI** (`vertex-ai`): Uses Application Default Credentials (ADC) with `GOOGLE_CLOUD_PROJECT`.
+
+Auth type can be explicitly set via `auth_selectedType` in your Scion settings profile. See [Agent Credentials](/guides/agent-credentials) for details.
 
 ### Configuration
 - **scion-agent.yaml**: Can be configured via `agent_instructions` and `system_prompt` fields in the template.
-- **Settings File**: `~/.gemini/settings.json` (inside the agent container).
+- **Settings File**: `~/.gemini/settings.json` (inside the agent container). Scion automatically updates `security.auth.selectedType` in this file to match the resolved auth method.
 - **System Prompt**: `~/.gemini/system_prompt.md` is automatically seeded if `system_prompt` is provided in the agent config.
 
 ### Known Limitations
 - The `gemini` CLI tool must be installed in the container image (included in default images).
-- Some advanced Vertex AI configurations might require specific environment variables like `GOOGLE_CLOUD_LOCATION`.
 
 ---
 
@@ -30,8 +31,11 @@ The Gemini harness supports multiple authentication methods:
 A harness for Anthropic's "Claude Code" agent.
 
 ### Authentication
-- **API Key**: Set `ANTHROPIC_API_KEY` in your host environment. Scion propagates this to the agent.
-- **Manual Login**: You can run `claude login` inside the agent, which generates a `~/.claude.json` file. Scion will preserve this file across sessions.
+Claude supports two authentication methods (auto-detected in this order):
+- **API Key** (`api-key`): Set `ANTHROPIC_API_KEY` in your host environment. Scion propagates this to the agent and pre-approves it in `.claude.json` so Claude Code does not prompt for confirmation.
+- **Vertex AI** (`vertex-ai`): Uses Google Cloud's Vertex AI endpoint with ADC, `GOOGLE_CLOUD_PROJECT`, and `GOOGLE_CLOUD_REGION`.
+
+Auth type can be explicitly set via `auth_selectedType` in your Scion settings profile. See [Agent Credentials](/guides/agent-credentials) for details.
 
 ### Configuration
 - **scion-agent.yaml**: Can be configured via `agent_instructions` and `system_prompt` fields in the template.
@@ -40,7 +44,6 @@ A harness for Anthropic's "Claude Code" agent.
 
 ### Known Limitations
 - Claude Code is a beta tool and its configuration format may change.
-- Requires `ANTHROPIC_API_KEY` to be set or manual login.
 
 ---
 
@@ -49,8 +52,9 @@ A harness for Anthropic's "Claude Code" agent.
 The OpenCode TUI.
 
 ### Authentication
-- **Auth File**: OpenCode uses an `auth.json` file located at `~/.local/share/opencode/auth.json`.
-- **Propagation**: If you have `~/.local/share/opencode/auth.json` on your host machine, Scion copies it to the agent's home directory upon creation.
+OpenCode supports two authentication methods (auto-detected in this order):
+- **API Key** (`api-key`): Set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in your environment (Anthropic preferred).
+- **Auth File** (`auth-file`): Uses `~/.local/share/opencode/auth.json` if available. Scion copies this file from your host when the agent is created.
 
 ### Configuration
 - **Config File**: `~/.config/opencode/opencode.json`.
@@ -58,7 +62,7 @@ The OpenCode TUI.
 
 ### Known Limitations
 - **Auth File Copy**: The `auth.json` file is copied only when the agent is **created**. If you update your host credentials, you may need to manually update the file in the agent or recreate the agent.
-- **No Hook support** opencode does not have analogous hook support, and so will require use of plugin system to notify the scion orchestrator.
+- **No Hook support**: OpenCode does not have analogous hook support, and so will require use of plugin system to notify the scion orchestrator.
 
 ---
 
@@ -67,9 +71,9 @@ The OpenCode TUI.
 A harness for the OpenAI Codex CLI.
 
 ### Authentication
-- **API Keys**: Respects `OPENAI_API_KEY` or `CODEX_API_KEY` environment variables.
-- **Auth File**: Codex uses an `auth.json` file located at `~/.codex/auth.json`.
-- **Propagation**: If you have `~/.codex/auth.json` on your host machine, Scion copies it to the agent's home directory upon creation.
+Codex supports two authentication methods (auto-detected in this order):
+- **API Key** (`api-key`): Set `CODEX_API_KEY` or `OPENAI_API_KEY` in your environment (Codex-specific key preferred).
+- **Auth File** (`auth-file`): Uses `~/.codex/auth.json` if available. Scion copies this file from your host when the agent is created.
 
 ### Configuration
 - **Config File**: `~/.codex/config.toml`.

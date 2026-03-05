@@ -7,14 +7,15 @@ Scion automatically discovers and injects LLM credentials into agent containers 
 
 ## How It Works
 
-When an agent starts, Scion runs a four-stage credential pipeline:
+When an agent starts, Scion runs a five-stage credential pipeline:
 
-1. **Gather** — Scans your environment variables and well-known file paths for all available credentials.
-2. **Overlay** — Applies any harness-specific settings overrides (e.g., Gemini auth mode from `settings.json`).
-3. **Resolve** — The harness selects the best auth method from what's available, following its preference order.
+1. **Gather** — Scans environment variables and well-known file paths for all available credentials. Hub-resolved secrets and profile/harness-config env vars are injected into the environment *before* this scan, so they are discovered like any other credential.
+2. **Overlay** — In broker mode, maps hub-provided file secrets to auth config fields. Then applies the `auth_selectedType` from `scion-agent.json` (populated from your settings profile) to force a specific auth method.
+3. **Resolve** — The harness selects the best auth method from what's available, following its preference order (or the explicitly selected type).
 4. **Validate** — Checks that the resolved credentials are complete and files exist on disk.
+5. **Apply** — Harnesses update their native settings files to match the resolved auth method (e.g., Gemini writes `selectedType` to `settings.json`, Claude pre-approves the API key in `.claude.json`).
 
-This pipeline works identically for local agents and hub-dispatched agents. For hub-dispatched agents, secrets are injected into the environment before the pipeline runs.
+This pipeline works for both local agents and hub-dispatched agents. In **broker mode** (hub-dispatched agents), Scion isolates agent credentials from the broker operator's environment — the gather stage only reads from the injected env map and never falls back to the host's environment variables or filesystem.
 
 ---
 
@@ -49,13 +50,13 @@ If ADC credentials exist at `~/.config/gcloud/application_default_credentials.js
 
 ### Gemini CLI
 
-Gemini supports four auth methods. When no explicit mode is selected, Scion auto-detects in this order:
+Gemini supports three auth methods. When no explicit type is selected, Scion auto-detects in this order:
 
 | Priority | Method | What to Provide |
 | :--- | :--- | :--- |
 | 1 | **API Key** | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
-| 2 | **ADC** | `GOOGLE_APPLICATION_CREDENTIALS` (or default file path) |
-| 3 | **OAuth** | OAuth credentials file at `~/.gemini/oauth_creds.json` |
+| 2 | **OAuth** (`auth-file`) | OAuth credentials file at `~/.gemini/oauth_creds.json` |
+| 3 | **Vertex AI** | `GOOGLE_APPLICATION_CREDENTIALS` (or default ADC path) + `GOOGLE_CLOUD_PROJECT` |
 
 **API Key**:
 
@@ -64,29 +65,66 @@ export GEMINI_API_KEY=AIza...
 scion start --harness gemini my-agent
 ```
 
-**Forcing a specific mode** — Gemini also supports explicit mode selection via the agent's `settings.json`. Set `security.auth.selectedType` to one of: `gemini-api-key`, `oauth-personal`, `vertex-ai`, or `compute-default-credentials`.
+**OAuth** — uses the OAuth credentials file created by `gemini auth login`:
+
+```bash
+# After authenticating via `gemini auth login` on your host
+scion start --harness gemini my-agent
+```
+
+**Vertex AI** — uses Application Default Credentials with a Google Cloud project. Region is optional:
+
+```bash
+export GOOGLE_CLOUD_PROJECT=my-project
+scion start --harness gemini my-agent
+# ADC file at ~/.config/gcloud/application_default_credentials.json is auto-detected
+```
+
+### OpenCode
+
+OpenCode supports two auth methods:
+
+| Priority | Method | What to Provide |
+| :--- | :--- | :--- |
+| 1 | **API Key** | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
+| 2 | **Auth File** (`auth-file`) | Credentials at `~/.local/share/opencode/auth.json` |
+
+When using API key auth, Anthropic keys are preferred over OpenAI keys.
+
+### Codex
+
+Codex supports two auth methods:
+
+| Priority | Method | What to Provide |
+| :--- | :--- | :--- |
+| 1 | **API Key** | `CODEX_API_KEY` or `OPENAI_API_KEY` |
+| 2 | **Auth File** (`auth-file`) | Credentials at `~/.codex/auth.json` |
+
+When using API key auth, Codex-specific keys are preferred over OpenAI keys.
 
 ### Generic
 
 The Generic harness uses a **passthrough** strategy — it injects all available credentials into the container without selecting a specific auth method. This is useful for custom harnesses that handle their own credential logic.
 
-All API keys, project/region variables, and credential files that are present in your environment will be forwarded.
+All API keys, project/region variables, and credential files present in your environment will be forwarded.
 
-### OpenCode
+---
 
-| Priority | Method | What to Provide |
+## Explicit Auth Type Selection
+
+By default, each harness auto-detects the best auth method from what's available. You can override this by setting `auth_selectedType` in your Scion settings profile or template configuration. Scion uses **universal auth type** values that work across all harnesses:
+
+| Universal Type | Description | Supported By |
 | :--- | :--- | :--- |
-| 1 | **Anthropic API Key** | `ANTHROPIC_API_KEY` |
-| 2 | **OpenAI API Key** | `OPENAI_API_KEY` |
-| 3 | **Auth File** | Credentials at `~/.local/share/opencode/auth.json` |
+| `api-key` | Direct API key authentication | Claude, Gemini, OpenCode, Codex |
+| `auth-file` | Credential file (OAuth or native auth) | Gemini, OpenCode, Codex |
+| `vertex-ai` | Google Cloud Vertex AI with ADC | Claude, Gemini |
 
-### Codex
+When a type is explicitly selected but its required credentials are missing, the agent will fail to start with a clear error — it will not fall back to another method.
 
-| Priority | Method | What to Provide |
-| :--- | :--- | :--- |
-| 1 | **Codex API Key** | `CODEX_API_KEY` |
-| 2 | **OpenAI API Key** | `OPENAI_API_KEY` |
-| 3 | **Auth File** | Credentials at `~/.codex/auth.json` |
+:::note
+Scion translates universal auth types to harness-native values internally. For example, `auth-file` becomes `oauth-personal` in Gemini's `settings.json`. You should always use the universal values in your Scion configuration.
+:::
 
 ---
 
@@ -118,7 +156,7 @@ Scion probes these well-known file paths and uses them if present:
 
 | File Path | Credential Type | Used By |
 | :--- | :--- | :--- |
-| `~/.config/gcloud/application_default_credentials.json` | Google ADC | Claude (Vertex), Gemini, Generic |
+| `~/.config/gcloud/application_default_credentials.json` | Google ADC | Claude (Vertex), Gemini (Vertex), Generic |
 | `~/.gemini/oauth_creds.json` | Gemini OAuth | Gemini, Generic |
 | `~/.codex/auth.json` | Codex auth | Codex, Generic |
 | `~/.local/share/opencode/auth.json` | OpenCode auth | OpenCode, Generic |
@@ -188,9 +226,13 @@ scion hub secret set GOOGLE_CLOUD_REGION us-east5
 Each harness produces this error when it can't find any usable credentials. The error message lists exactly what credentials are needed:
 
 - **Claude**: Set `ANTHROPIC_API_KEY`, or provide `GOOGLE_APPLICATION_CREDENTIALS` + `GOOGLE_CLOUD_PROJECT` + `GOOGLE_CLOUD_REGION` for Vertex AI.
-- **Gemini**: Set `GEMINI_API_KEY` or `GOOGLE_API_KEY`, provide `GOOGLE_APPLICATION_CREDENTIALS` for ADC, or set up OAuth at `~/.gemini/oauth_creds.json`.
+- **Gemini**: Set `GEMINI_API_KEY` or `GOOGLE_API_KEY`, set up OAuth at `~/.gemini/oauth_creds.json`, or provide ADC with `GOOGLE_CLOUD_PROJECT` for Vertex AI.
 - **OpenCode**: Set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, or provide credentials at `~/.local/share/opencode/auth.json`.
 - **Codex**: Set `CODEX_API_KEY` or `OPENAI_API_KEY`, or provide credentials at `~/.codex/auth.json`.
+
+### "auth type selected but..."
+
+This error occurs when you explicitly set `auth_selectedType` but the required credentials for that type are missing. For example, selecting `vertex-ai` without setting `GOOGLE_CLOUD_PROJECT`. Either provide the missing credentials or remove the explicit type selection to let Scion auto-detect.
 
 ### "auth validation failed: credential file does not exist"
 
@@ -209,6 +251,10 @@ Claude's Vertex AI mode requires **all three** of these to be set:
 
 If any one is missing, Claude falls back to API key mode. If `ANTHROPIC_API_KEY` is also missing, the agent will fail to start.
 
+### Vertex AI not activating for Gemini
+
+Gemini's Vertex AI auto-detection requires both ADC credentials and `GOOGLE_CLOUD_PROJECT`. Unlike Claude, Gemini does not require `GOOGLE_CLOUD_REGION` (though it is forwarded if set). If only ADC is present without a project, Gemini will not auto-select Vertex AI.
+
 ### Gemini using wrong auth mode
 
-Gemini auto-detects credentials in priority order (API key → ADC → OAuth). To force a specific mode, set `security.auth.selectedType` in the agent's settings. See [Templates & Harnesses](/guides/templates) for how to configure harness settings.
+Gemini auto-detects credentials in priority order: API key → OAuth → Vertex AI. If multiple credential types are present, the highest-priority one wins. To force a specific mode, set `auth_selectedType` in your Scion settings profile. See [Templates & Harnesses](/guides/templates) for how to configure harness settings.
