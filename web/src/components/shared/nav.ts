@@ -119,12 +119,9 @@ export class ScionNav extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, var(--scion-primary, #3b82f6) 0%, #1d4ed8 100%);
-      border-radius: 0.5rem;
-      color: white;
-      font-weight: 700;
-      font-size: 1rem;
+      font-size: 1.5rem;
       flex-shrink: 0;
+      line-height: 1;
     }
 
     .logo-text {
@@ -327,7 +324,7 @@ export class ScionNav extends LitElement {
 
     return html`
       <div class="logo">
-        <div class="logo-icon">S</div>
+        <div class="logo-icon">🌱</div>
         <div class="logo-text">
           <h1>Scion</h1>
           <span>Agent Orchestration</span>
