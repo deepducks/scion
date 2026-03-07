@@ -67,6 +67,11 @@ type AgentDetail struct {
 	ToolName    string `json:"toolName,omitempty"`
 	Message     string `json:"message,omitempty"`
 	TaskSummary string `json:"taskSummary,omitempty"`
+
+	// Limits tracking — included so the frontend can update counters in real-time.
+	CurrentTurns      int    `json:"currentTurns,omitempty"`
+	CurrentModelCalls int    `json:"currentModelCalls,omitempty"`
+	StartedAt         string `json:"startedAt,omitempty"`
 }
 
 // AgentStatusEvent is published when an agent's status changes.
@@ -244,12 +249,19 @@ func (p *ChannelEventPublisher) PublishAgentStatus(_ context.Context, agent *sto
 		Activity:        agent.Activity,
 		ContainerStatus: agent.ContainerStatus,
 	}
-	if agent.ToolName != "" || agent.Message != "" || agent.TaskSummary != "" {
-		evt.Detail = &AgentDetail{
-			ToolName:    agent.ToolName,
-			Message:     agent.Message,
-			TaskSummary: agent.TaskSummary,
-		}
+
+	detail := AgentDetail{
+		ToolName:          agent.ToolName,
+		Message:           agent.Message,
+		TaskSummary:       agent.TaskSummary,
+		CurrentTurns:      agent.CurrentTurns,
+		CurrentModelCalls: agent.CurrentModelCalls,
+	}
+	if !agent.StartedAt.IsZero() {
+		detail.StartedAt = agent.StartedAt.Format("2006-01-02T15:04:05Z07:00")
+	}
+	if detail != (AgentDetail{}) {
+		evt.Detail = &detail
 	}
 	p.publish("agent."+agent.ID+".status", evt)
 	if agent.GroveID != "" {

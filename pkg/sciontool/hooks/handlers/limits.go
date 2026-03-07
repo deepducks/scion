@@ -179,9 +179,9 @@ func (h *LimitsHandler) triggerLimitsExceeded(message string) {
 		}
 	}
 
-	// 4. Send SIGUSR1 to PID 1 (sciontool init) to initiate shutdown
-	if err := signalPID1(); err != nil {
-		log.Error("Failed to send SIGUSR1 to PID 1: %v", err)
+	// 4. Signal init process to initiate shutdown (trigger file + SIGUSR1 fallback)
+	if err := signalLimitsExceeded(); err != nil {
+		log.Error("Failed to signal limits exceeded: %v", err)
 	}
 }
 
@@ -227,13 +227,34 @@ func writeLimitsState(path string, ls *LimitsState) error {
 	return nil
 }
 
-// signalPID1 sends SIGUSR1 to PID 1 (sciontool init).
-func signalPID1() error {
+// LimitsTriggerFile is the well-known path for the limits-exceeded trigger file.
+// When a hook handler detects a limit is exceeded, it creates this file.
+// The init process watches for it to initiate shutdown.
+const LimitsTriggerFile = "/tmp/scion-limits-exceeded"
+
+// signalLimitsExceeded notifies PID 1 that a limit has been exceeded.
+// It writes a trigger file and also attempts SIGUSR1 as a fallback.
+func signalLimitsExceeded() error {
+	// Primary mechanism: create a trigger file that init watches for.
+	// This works regardless of UID differences between the hook process
+	// and PID 1 (init runs as root, hooks run as the scion user).
+	if err := os.WriteFile(LimitsTriggerFile, []byte("exceeded"), 0666); err != nil {
+		log.Error("Failed to write limits trigger file: %v", err)
+	}
+
+	// Fallback: send SIGUSR1 to PID 1. This may fail with EPERM when the
+	// hook process runs as a non-root user and PID 1 runs as root.
 	p, err := os.FindProcess(1)
 	if err != nil {
 		return fmt.Errorf("finding PID 1: %w", err)
 	}
-	return p.Signal(syscall.SIGUSR1)
+	if err := p.Signal(syscall.SIGUSR1); err != nil {
+		// Expected to fail when running as non-root; the trigger file
+		// is the reliable mechanism.
+		log.Debug("SIGUSR1 to PID 1 failed (expected if non-root): %v", err)
+		return nil
+	}
+	return nil
 }
 
 // ParseEnvInt reads an integer from an environment variable. Returns 0 if unset or invalid.

@@ -166,6 +166,9 @@ export interface AgentDetail {
   toolName?: string;
   message?: string;
   taskSummary?: string;
+  currentTurns?: number;
+  currentModelCalls?: number;
+  startedAt?: string;
 }
 
 /**

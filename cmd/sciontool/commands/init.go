@@ -432,9 +432,20 @@ func runInit(args []string) int {
 		} else {
 			log.Info("Limits initialized: max_turns=%d, max_model_calls=%d", maxTurns, maxModelCalls)
 		}
+		// Remove stale trigger file from a previous run
+		os.Remove(handlers.LimitsTriggerFile)
 	}
 
-	// Wait for child to exit, duration limit, or SIGUSR1 (limits exceeded from hook)
+	// Watch for limits-exceeded trigger file (works across UID boundaries).
+	// This supplements SIGUSR1 which may fail when hooks run as non-root.
+	triggerChan := make(chan struct{}, 1)
+	triggerCtx, triggerCancel := context.WithCancel(context.Background())
+	defer triggerCancel()
+	if maxTurns > 0 || maxModelCalls > 0 {
+		go watchLimitsTriggerFile(triggerCtx, triggerChan)
+	}
+
+	// Wait for child to exit, duration limit, SIGUSR1, or trigger file
 	var result struct {
 		code int
 		err  error
@@ -453,6 +464,14 @@ func runInit(args []string) int {
 		limitsExceeded = true
 		log.TaggedInfo("LIMITS_EXCEEDED", "Received SIGUSR1: limit exceeded, initiating shutdown")
 		// Initiate graceful shutdown of the child process
+		if err := sup.Signal(syscall.SIGTERM); err != nil {
+			log.Error("Failed to send SIGTERM to child: %v", err)
+		}
+		result = <-exitChan
+	case <-triggerChan:
+		// Trigger file detected from hook handler - limits already set in agent-info.json
+		limitsExceeded = true
+		log.TaggedInfo("LIMITS_EXCEEDED", "Trigger file detected: limit exceeded, initiating shutdown")
 		if err := sup.Signal(syscall.SIGTERM); err != nil {
 			log.Error("Failed to send SIGTERM to child: %v", err)
 		}
@@ -557,6 +576,25 @@ func extractChildCommand(args []string) []string {
 // setupHostUser modifies the scion user's UID/GID to match the host user.
 // This is only done when running as root and SCION_HOST_UID/GID are set.
 // Returns the target UID/GID for the child process (0 = no change).
+// watchLimitsTriggerFile polls for the limits-exceeded trigger file created by
+// hook handlers. This works across UID boundaries (hooks run as scion user,
+// init runs as root) where SIGUSR1 would fail with EPERM.
+func watchLimitsTriggerFile(ctx context.Context, ch chan<- struct{}) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := os.Stat(handlers.LimitsTriggerFile); err == nil {
+				ch <- struct{}{}
+				return
+			}
+		}
+	}
+}
+
 func setupHostUser() (int, int) {
 	// Only run if we're root and env vars are set
 	if os.Getuid() != 0 {

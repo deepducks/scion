@@ -102,6 +102,48 @@ func TestChannelEventPublisher_PublishAgentStatus(t *testing.T) {
 	}
 }
 
+func TestChannelEventPublisher_PublishAgentStatus_IncludesTurnCounts(t *testing.T) {
+	pub := NewChannelEventPublisher()
+	defer pub.Close()
+
+	ch, unsub := pub.Subscribe("agent.a1.status")
+	defer unsub()
+
+	agent := &store.Agent{
+		ID:                "a1",
+		GroveID:           "g1",
+		Phase:             "running",
+		Activity:          "thinking",
+		CurrentTurns:      5,
+		CurrentModelCalls: 12,
+		StartedAt:         time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC),
+	}
+
+	pub.PublishAgentStatus(context.Background(), agent)
+
+	select {
+	case evt := <-ch:
+		var data AgentStatusEvent
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if data.Detail == nil {
+			t.Fatal("expected detail to be set")
+		}
+		if data.Detail.CurrentTurns != 5 {
+			t.Errorf("got currentTurns=%d, want 5", data.Detail.CurrentTurns)
+		}
+		if data.Detail.CurrentModelCalls != 12 {
+			t.Errorf("got currentModelCalls=%d, want 12", data.Detail.CurrentModelCalls)
+		}
+		if data.Detail.StartedAt == "" {
+			t.Error("expected startedAt to be set")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for agent event")
+	}
+}
+
 func TestChannelEventPublisher_PublishAgentCreated(t *testing.T) {
 	pub := NewChannelEventPublisher()
 	defer pub.Close()

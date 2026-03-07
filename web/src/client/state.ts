@@ -264,6 +264,19 @@ export class StateManager extends EventTarget {
       ) {
         delete delta.activity;
       }
+      // Promote limits tracking fields from SSE detail to top-level agent
+      const detail = delta.detail as import('../shared/types.js').AgentDetail | undefined;
+      if (detail) {
+        if (detail.currentTurns !== undefined) {
+          (delta as Record<string, unknown>).currentTurns = detail.currentTurns;
+        }
+        if (detail.currentModelCalls !== undefined) {
+          (delta as Record<string, unknown>).currentModelCalls = detail.currentModelCalls;
+        }
+        if (detail.startedAt) {
+          (delta as Record<string, unknown>).startedAt = detail.startedAt;
+        }
+      }
       // Ensure id is always set
       const updated = { ...existing, ...delta, id: agentId };
       // Preserve _capabilities from existing state when the delta doesn't

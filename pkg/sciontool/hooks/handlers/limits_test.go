@@ -372,6 +372,23 @@ func TestWriteLimitsState_AtomicWrite(t *testing.T) {
 	assert.Equal(t, "2026-02-22T10:30:00Z", read.StartedAt)
 }
 
+func TestLimitsTriggerFileConstant(t *testing.T) {
+	assert.Equal(t, "/tmp/scion-limits-exceeded", LimitsTriggerFile)
+}
+
+func TestSignalLimitsExceeded_CreatesTriggerFile(t *testing.T) {
+	// Clean up before and after
+	os.Remove(LimitsTriggerFile)
+	defer os.Remove(LimitsTriggerFile)
+
+	err := signalLimitsExceeded()
+	assert.NoError(t, err)
+
+	// Verify the trigger file was created
+	_, err = os.Stat(LimitsTriggerFile)
+	assert.NoError(t, err, "trigger file should exist after signalLimitsExceeded")
+}
+
 // readLimitsFile reads and parses an agent-limits.json file for test assertions.
 func readLimitsFile(t *testing.T, path string) LimitsState {
 	t.Helper()
