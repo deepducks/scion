@@ -33,7 +33,12 @@ import (
 
 // mockManager implements agent.Manager for testing
 type mockManager struct {
-	agents []api.AgentInfo
+	agents        []api.AgentInfo
+	startCalls    int
+	stopCalls     int
+	startErr      error
+	stopErr       error
+	lastStartOpts api.StartOptions
 }
 
 func (m *mockManager) Provision(ctx context.Context, opts api.StartOptions) (*api.ScionConfig, error) {
@@ -41,9 +46,14 @@ func (m *mockManager) Provision(ctx context.Context, opts api.StartOptions) (*ap
 }
 
 func (m *mockManager) Start(ctx context.Context, opts api.StartOptions) (*api.AgentInfo, error) {
+	m.startCalls++
+	m.lastStartOpts = opts
+	if m.startErr != nil {
+		return nil, m.startErr
+	}
 	agent := &api.AgentInfo{
-		ID:     "test-container-id",
-		Name:   opts.Name,
+		ID:    "test-container-id",
+		Name:  opts.Name,
 		Phase: "running",
 	}
 	m.agents = append(m.agents, *agent)
@@ -51,7 +61,8 @@ func (m *mockManager) Start(ctx context.Context, opts api.StartOptions) (*api.Ag
 }
 
 func (m *mockManager) Stop(ctx context.Context, agentID string) error {
-	return nil
+	m.stopCalls++
+	return m.stopErr
 }
 
 func (m *mockManager) Delete(ctx context.Context, agentID string, deleteFiles bool, grovePath string, removeBranch bool) (bool, error) {
@@ -273,6 +284,48 @@ func TestStopAgent(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Errorf("expected status %d, got %d", http.StatusAccepted, w.Code)
+	}
+}
+
+func TestRestartAgent(t *testing.T) {
+	srv := newTestServer()
+	mgr := srv.manager.(*mockManager)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/test-agent-1/restart", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusAccepted, w.Code, w.Body.String())
+	}
+	if mgr.stopCalls != 1 {
+		t.Fatalf("expected Stop to be called once, got %d", mgr.stopCalls)
+	}
+	if mgr.startCalls != 1 {
+		t.Fatalf("expected Start to be called once, got %d", mgr.startCalls)
+	}
+	if mgr.lastStartOpts.Name != "test-agent-1" {
+		t.Fatalf("expected restart to start agent 'test-agent-1', got %q", mgr.lastStartOpts.Name)
+	}
+}
+
+func TestRestartAgent_StartFailure(t *testing.T) {
+	srv := newTestServer()
+	mgr := srv.manager.(*mockManager)
+	mgr.startErr = fmt.Errorf("boom")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/test-agent-1/restart", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusInternalServerError, w.Code, w.Body.String())
+	}
+	if mgr.stopCalls != 1 {
+		t.Fatalf("expected Stop to be called once, got %d", mgr.stopCalls)
+	}
+	if mgr.startCalls != 1 {
+		t.Fatalf("expected Start to be called once, got %d", mgr.startCalls)
 	}
 }
 
@@ -1335,8 +1388,8 @@ hub:
 // gitCloneCapturingManager captures env and GitClone from Start options.
 type gitCloneCapturingManager struct {
 	mockManager
-	lastEnv      map[string]string
-	lastGitClone *api.GitCloneConfig
+	lastEnv       map[string]string
+	lastGitClone  *api.GitCloneConfig
 	lastWorkspace string
 	lastGrovePath string
 }

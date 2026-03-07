@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestAuthenticatedBrokerClient_CreateAgent(t *testing.T) {
 		ID:      brokerID,
 		Name:    "test-host",
 		Slug:    "test-host",
-				Status:  store.BrokerStatusOnline,
+		Status:  store.BrokerStatusOnline,
 		Created: time.Now(),
 		Updated: time.Now(),
 	}
@@ -58,7 +59,7 @@ func TestAuthenticatedBrokerClient_CreateAgent(t *testing.T) {
 	}
 
 	secret := &store.BrokerSecret{
-		BrokerID:    brokerID,
+		BrokerID:  brokerID,
 		SecretKey: secretKey,
 		Algorithm: store.BrokerSecretAlgorithmHMACSHA256,
 		Status:    store.BrokerSecretStatusActive,
@@ -115,7 +116,7 @@ func TestAuthenticatedBrokerClient_CreateAgent(t *testing.T) {
 
 	// Make request
 	req := &RemoteCreateAgentRequest{
-		Slug: "agent-1",
+		Slug:    "agent-1",
 		Name:    "test-agent",
 		GroveID: "grove-1",
 	}
@@ -163,7 +164,7 @@ func TestAuthenticatedBrokerClient_StartAgent(t *testing.T) {
 		ID:      brokerID,
 		Name:    "test-host-2",
 		Slug:    "test-host-2",
-				Status:  store.BrokerStatusOnline,
+		Status:  store.BrokerStatusOnline,
 		Created: time.Now(),
 		Updated: time.Now(),
 	}
@@ -172,7 +173,7 @@ func TestAuthenticatedBrokerClient_StartAgent(t *testing.T) {
 	}
 
 	secret := &store.BrokerSecret{
-		BrokerID:    brokerID,
+		BrokerID:  brokerID,
 		SecretKey: secretKey,
 		Algorithm: store.BrokerSecretAlgorithmHMACSHA256,
 		Status:    store.BrokerSecretStatusActive,
@@ -232,7 +233,7 @@ func TestAuthenticatedBrokerClient_StartAgent(t *testing.T) {
 	}
 }
 
-func TestAuthenticatedBrokerClient_MissingSecret(t *testing.T) {
+func TestAuthenticatedBrokerClient_MissingSecretFailsClosed(t *testing.T) {
 	// Create a test store without a secret
 	db, err := sqlite.New(":memory:")
 	if err != nil {
@@ -251,7 +252,7 @@ func TestAuthenticatedBrokerClient_MissingSecret(t *testing.T) {
 		ID:      brokerID,
 		Name:    "test-host-no-secret",
 		Slug:    "test-host-no-secret",
-				Status:  store.BrokerStatusOnline,
+		Status:  store.BrokerStatusOnline,
 		Created: time.Now(),
 		Updated: time.Now(),
 	}
@@ -259,41 +260,38 @@ func TestAuthenticatedBrokerClient_MissingSecret(t *testing.T) {
 		t.Fatalf("failed to create runtime broker: %v", err)
 	}
 
-	// Create a test server that checks if request is unsigned
-	var hasSignature bool
+	// Create a test server to ensure no request is sent
+	requestReceived := false
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hasSignature = r.Header.Get(apiclient.HeaderSignature) != ""
-
-		// Return success anyway (simulating permissive mode)
-		resp := &RemoteAgentResponse{Created: true}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		requestReceived = true
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	// Create authenticated client with debug mode to see warning
+	// Create authenticated client with debug mode to ensure behavior is the same
 	client := NewAuthenticatedBrokerClient(db, true)
 
-	// Make request - should succeed but without signature
+	// Make request - should fail before sending anything
 	req := &RemoteCreateAgentRequest{
-		Slug: "agent-1",
+		Slug:    "agent-1",
 		Name:    "test-agent",
 		GroveID: "grove-1",
 	}
 
 	_, err = client.CreateAgent(context.Background(), brokerID, server.URL, req)
-	if err != nil {
-		t.Fatalf("CreateAgent failed: %v", err)
+	if err == nil {
+		t.Fatal("expected CreateAgent to fail when broker secret is missing")
 	}
-
-	// Request should have been sent without signature
-	if hasSignature {
-		t.Error("expected no signature when secret is missing")
+	if !strings.Contains(err.Error(), "failed to sign request") {
+		t.Fatalf("expected sign failure error, got: %v", err)
+	}
+	if requestReceived {
+		t.Fatal("expected no request to be sent when signing fails")
 	}
 }
 
-func TestAuthenticatedBrokerClient_ExpiredSecret(t *testing.T) {
+func TestAuthenticatedBrokerClient_ExpiredSecretFailsClosed(t *testing.T) {
 	// Create a test store with an expired secret
 	db, err := sqlite.New(":memory:")
 	if err != nil {
@@ -313,7 +311,7 @@ func TestAuthenticatedBrokerClient_ExpiredSecret(t *testing.T) {
 		ID:      brokerID,
 		Name:    "test-host-expired",
 		Slug:    "test-host-expired",
-				Status:  store.BrokerStatusOnline,
+		Status:  store.BrokerStatusOnline,
 		Created: time.Now(),
 		Updated: time.Now(),
 	}
@@ -322,7 +320,7 @@ func TestAuthenticatedBrokerClient_ExpiredSecret(t *testing.T) {
 	}
 
 	secret := &store.BrokerSecret{
-		BrokerID:    brokerID,
+		BrokerID:  brokerID,
 		SecretKey: secretKey,
 		Algorithm: store.BrokerSecretAlgorithmHMACSHA256,
 		Status:    store.BrokerSecretStatusActive,
@@ -333,35 +331,86 @@ func TestAuthenticatedBrokerClient_ExpiredSecret(t *testing.T) {
 		t.Fatalf("failed to create broker secret: %v", err)
 	}
 
-	// Create a test server
-	var hasSignature bool
+	// Create a test server to ensure no request is sent
+	requestReceived := false
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hasSignature = r.Header.Get(apiclient.HeaderSignature) != ""
-		resp := &RemoteAgentResponse{Created: true}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		requestReceived = true
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
 	// Create authenticated client
 	client := NewAuthenticatedBrokerClient(db, true)
 
-	// Make request - should proceed without signature due to expired secret
+	// Make request - should fail before sending due to expired secret
 	req := &RemoteCreateAgentRequest{
-		Slug: "agent-1",
+		Slug:    "agent-1",
 		Name:    "test-agent",
 		GroveID: "grove-1",
 	}
 
 	_, err = client.CreateAgent(context.Background(), brokerID, server.URL, req)
+	if err == nil {
+		t.Fatal("expected CreateAgent to fail when broker secret is expired")
+	}
+	if !strings.Contains(err.Error(), "failed to sign request") {
+		t.Fatalf("expected sign failure error, got: %v", err)
+	}
+	if requestReceived {
+		t.Fatal("expected no request to be sent when signing fails")
+	}
+}
+
+func TestAuthenticatedBrokerClient_StartAgent_InvalidJSONFails(t *testing.T) {
+	db, err := sqlite.New(":memory:")
 	if err != nil {
-		t.Fatalf("CreateAgent failed: %v", err)
+		t.Fatalf("failed to create test store: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Migrate(context.Background()); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
 	}
 
-	// Request should have been sent without signature
-	if hasSignature {
-		t.Error("expected no signature when secret is expired")
+	brokerID := "test-host-invalid-json"
+	broker := &store.RuntimeBroker{
+		ID:      brokerID,
+		Name:    "test-host-invalid-json",
+		Slug:    "test-host-invalid-json",
+		Status:  store.BrokerStatusOnline,
+		Created: time.Now(),
+		Updated: time.Now(),
+	}
+	if err := db.CreateRuntimeBroker(context.Background(), broker); err != nil {
+		t.Fatalf("failed to create runtime broker: %v", err)
+	}
+
+	secret := &store.BrokerSecret{
+		BrokerID:  brokerID,
+		SecretKey: []byte("invalid-json-secret-key-32-bytes!"),
+		Algorithm: store.BrokerSecretAlgorithmHMACSHA256,
+		Status:    store.BrokerSecretStatusActive,
+		CreatedAt: time.Now(),
+	}
+	if err := db.CreateBrokerSecret(context.Background(), secret); err != nil {
+		t.Fatalf("failed to create broker secret: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{this is not json}`))
+	}))
+	defer server.Close()
+
+	client := NewAuthenticatedBrokerClient(db, false)
+	_, err = client.StartAgent(context.Background(), brokerID, server.URL, "agent-1", "", "", "", "", nil)
+	if err == nil {
+		t.Fatal("expected StartAgent to fail on invalid JSON response")
+	}
+	if !strings.Contains(err.Error(), "failed to decode response") {
+		t.Fatalf("expected decode error, got: %v", err)
 	}
 }
 
@@ -385,7 +434,7 @@ func TestAuthenticatedBrokerClient_AllOperations(t *testing.T) {
 		ID:      brokerID,
 		Name:    "test-host-ops",
 		Slug:    "test-host-ops",
-				Status:  store.BrokerStatusOnline,
+		Status:  store.BrokerStatusOnline,
 		Created: time.Now(),
 		Updated: time.Now(),
 	}
@@ -394,7 +443,7 @@ func TestAuthenticatedBrokerClient_AllOperations(t *testing.T) {
 	}
 
 	secret := &store.BrokerSecret{
-		BrokerID:    brokerID,
+		BrokerID:  brokerID,
 		SecretKey: secretKey,
 		Algorithm: store.BrokerSecretAlgorithmHMACSHA256,
 		Status:    store.BrokerSecretStatusActive,
@@ -419,6 +468,15 @@ func TestAuthenticatedBrokerClient_AllOperations(t *testing.T) {
 		switch {
 		case r.URL.Path == "/api/v1/agents" && r.Method == "POST":
 			resp := &RemoteAgentResponse{Created: true}
+			json.NewEncoder(w).Encode(resp)
+		case r.URL.Path == "/api/v1/agents/test-agent/start" && r.Method == "POST":
+			resp := &RemoteAgentResponse{
+				Agent: &RemoteAgentInfo{
+					ID:    "test-agent",
+					Name:  "test-agent",
+					Phase: "running",
+				},
+			}
 			json.NewEncoder(w).Encode(resp)
 		default:
 			w.WriteHeader(http.StatusOK)

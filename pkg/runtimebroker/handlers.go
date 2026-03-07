@@ -487,7 +487,7 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 					)
 				}
 
-					// Build SecretInfo for needed keys only
+				// Build SecretInfo for needed keys only
 				var respSecretInfo map[string]api.SecretKeyInfo
 				for _, key := range needs {
 					if info, ok := secretInfo[key]; ok {
@@ -686,7 +686,7 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 			Slug:   req.Slug,
 			Name:   req.Name,
 			Status: string(state.PhaseCreated),
-		Phase:  string(state.PhaseCreated),
+			Phase:  string(state.PhaseCreated),
 		}
 		if cfg != nil {
 			agentResp.HarnessConfig = cfg.HarnessConfig
@@ -1079,13 +1079,29 @@ func (s *Server) stopAgent(w http.ResponseWriter, r *http.Request, id string) {
 	s.hubMu.RUnlock()
 
 	writeJSON(w, http.StatusAccepted, map[string]string{
-		"status": "accepted",
+		"status":  "accepted",
 		"message": "Stop operation accepted",
 	})
 }
 
 func (s *Server) restartAgent(w http.ResponseWriter, r *http.Request, id string) {
 	ctx := r.Context()
+
+	opts := api.StartOptions{Name: id}
+	agents, err := s.manager.List(ctx, map[string]string{"scion.agent": "true"})
+	if err == nil {
+		for i := range agents {
+			if agents[i].Name == id || agents[i].ContainerID == id || agents[i].Slug == id {
+				opts.Name = agents[i].Name
+				opts.GrovePath = agents[i].GrovePath
+				break
+			}
+		}
+	}
+
+	if opts.GrovePath != "" {
+		opts.Profile = agent.GetSavedProfile(id, opts.GrovePath)
+	}
 
 	// Stop then start
 	if err := s.manager.Stop(ctx, id); err != nil {
@@ -1097,10 +1113,18 @@ func (s *Server) restartAgent(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 
-	// TODO: Implement proper restart with start after stop
+	mgr := s.resolveManagerForOpts(opts)
+	if _, err := mgr.Start(ctx, opts); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			NotFound(w, "Agent")
+			return
+		}
+		RuntimeError(w, "Failed to restart agent: "+err.Error())
+		return
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]string{
-		"status": "accepted",
+		"status":  "accepted",
 		"message": "Restart operation accepted",
 	})
 }

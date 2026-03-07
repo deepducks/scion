@@ -157,10 +157,18 @@ func (c *HTTPRuntimeBrokerClient) StartAgent(ctx context.Context, brokerID, brok
 		return nil, fmt.Errorf("runtime broker returned error %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var result RemoteAgentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		// If the broker doesn't return a parseable response, that's OK — return nil
-		return nil, nil
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		bodySnippet := string(respBody)
+		if len(bodySnippet) > 256 {
+			bodySnippet = bodySnippet[:256] + "...(truncated)"
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (body=%q)", err, bodySnippet)
 	}
 
 	return &result, nil
@@ -525,9 +533,7 @@ func (d *HTTPAgentDispatcher) getBrokerEndpoint(ctx context.Context, brokerID st
 	}
 
 	if broker.Endpoint == "" {
-		// Fall back to constructing endpoint from broker info
-		// This assumes the broker is reachable at its default port
-		return fmt.Sprintf("http://localhost:9800"), nil
+		return "", fmt.Errorf("runtime broker %q has no endpoint configured", broker.ID)
 	}
 
 	return broker.Endpoint, nil
@@ -638,16 +644,16 @@ func (d *HTTPAgentDispatcher) buildCreateRequest(ctx context.Context, agent *sto
 			workspace = ""
 		}
 		req.Config = &RemoteAgentConfig{
-			Template:     agent.Template,
-			Image:        agent.AppliedConfig.Image,
-			HarnessConfig:      agent.AppliedConfig.HarnessConfig,
-			HarnessAuth:        agent.AppliedConfig.HarnessAuth,
-			Task:         agent.AppliedConfig.Task,
-			Workspace:    workspace,
-			Profile:      agent.AppliedConfig.Profile,
-			TemplateID:   agent.AppliedConfig.TemplateID,
-			TemplateHash: agent.AppliedConfig.TemplateHash,
-			GitClone:     agent.AppliedConfig.GitClone,
+			Template:      agent.Template,
+			Image:         agent.AppliedConfig.Image,
+			HarnessConfig: agent.AppliedConfig.HarnessConfig,
+			HarnessAuth:   agent.AppliedConfig.HarnessAuth,
+			Task:          agent.AppliedConfig.Task,
+			Workspace:     workspace,
+			Profile:       agent.AppliedConfig.Profile,
+			TemplateID:    agent.AppliedConfig.TemplateID,
+			TemplateHash:  agent.AppliedConfig.TemplateHash,
+			GitClone:      agent.AppliedConfig.GitClone,
 		}
 		req.ResolvedEnv = agent.AppliedConfig.Env
 

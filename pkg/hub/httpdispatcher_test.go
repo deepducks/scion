@@ -19,14 +19,15 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/ptone/scion-agent/pkg/api"
 	"github.com/ptone/scion-agent/pkg/agent/state"
+	"github.com/ptone/scion-agent/pkg/api"
 	"github.com/ptone/scion-agent/pkg/store"
 	"github.com/ptone/scion-agent/pkg/store/sqlite"
 )
@@ -218,7 +219,7 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate(t *testing.T) {
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "claude",
-			Task:    "Fix a bug",
+			Task:          "Fix a bug",
 		},
 	}
 
@@ -407,6 +408,30 @@ func TestHTTPRuntimeBrokerClient_CreateAgent(t *testing.T) {
 	}
 }
 
+func TestHTTPRuntimeBrokerClient_StartAgent_InvalidJSONFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/agents/test-agent/start" {
+			t.Errorf("expected /api/v1/agents/test-agent/start, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{not valid json}`))
+	}))
+	defer server.Close()
+
+	client := NewHTTPRuntimeBrokerClient()
+	_, err := client.StartAgent(context.Background(), "host-1", server.URL, "test-agent", "", "", "", "", nil)
+	if err == nil {
+		t.Fatal("expected StartAgent to fail on invalid JSON response")
+	}
+	if !strings.Contains(err.Error(), "failed to decode response") {
+		t.Fatalf("expected decode error, got: %v", err)
+	}
+}
+
 func TestHTTPRuntimeBrokerClient_StopAgent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -552,6 +577,42 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_WithGroveProviderPath(t *testin
 	}
 	if mockClient.lastCreateReq.GrovePath != "/home/user/projects/myproject/.scion" {
 		t.Errorf("expected GrovePath '/home/user/projects/myproject/.scion', got '%s'", mockClient.lastCreateReq.GrovePath)
+	}
+}
+
+func TestHTTPAgentDispatcher_DispatchAgentCreate_MissingBrokerEndpoint(t *testing.T) {
+	ctx := context.Background()
+	memStore := createTestStore(t)
+
+	broker := &store.RuntimeBroker{
+		ID:     "host-1",
+		Name:   "test-host",
+		Slug:   "test-host",
+		Status: store.BrokerStatusOnline,
+	}
+	if err := memStore.CreateRuntimeBroker(ctx, broker); err != nil {
+		t.Fatalf("failed to create runtime broker: %v", err)
+	}
+
+	mockClient := &mockRuntimeBrokerClient{}
+	dispatcher := NewHTTPAgentDispatcherWithClient(memStore, mockClient, false, slog.Default())
+
+	agent := &store.Agent{
+		ID:              "agent-1",
+		Name:            "test-agent",
+		Slug:            "test-agent",
+		RuntimeBrokerID: "host-1",
+	}
+
+	err := dispatcher.DispatchAgentCreate(ctx, agent)
+	if err == nil {
+		t.Fatal("expected DispatchAgentCreate to fail when broker endpoint is missing")
+	}
+	if !strings.Contains(err.Error(), "has no endpoint configured") {
+		t.Fatalf("expected endpoint validation error, got: %v", err)
+	}
+	if mockClient.createCalled {
+		t.Fatal("expected CreateAgent not to be called when endpoint is missing")
 	}
 }
 
@@ -772,9 +833,9 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_WithWorkspace(t *testing.T) {
 		GroveID:         "grove-1",
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
-			HarnessConfig:   "claude",
-			Task:      "do something",
-			Workspace: "./subfolder",
+			HarnessConfig: "claude",
+			Task:          "do something",
+			Workspace:     "./subfolder",
 		},
 	}
 
@@ -820,9 +881,9 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_WithCreatorName(t *testing.T) {
 		GroveID:         "grove-1",
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
-			HarnessConfig:     "claude",
-			Task:        "do something",
-			CreatorName: "alice@example.com",
+			HarnessConfig: "claude",
+			Task:          "do something",
+			CreatorName:   "alice@example.com",
 		},
 	}
 
@@ -1250,7 +1311,7 @@ func TestHTTPAgentDispatcher_DispatchAgentStart_ResolvesEnvFromStorage(t *testin
 		RuntimeBrokerID: "broker-env",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "gemini",
-			Env:     map[string]string{"EXISTING_VAR": "from-config"},
+			Env:           map[string]string{"EXISTING_VAR": "from-config"},
 		},
 	}
 
@@ -1331,7 +1392,7 @@ func TestHTTPAgentDispatcher_DispatchAgentStart_ConfigEnvTakesPrecedence(t *test
 		RuntimeBrokerID: "broker-prec",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "gemini",
-			Env:     map[string]string{"API_KEY": "config-value"},
+			Env:           map[string]string{"API_KEY": "config-value"},
 		},
 	}
 
@@ -1571,7 +1632,7 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_PropagatesGitClone(t *testing.T
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "claude",
-			Task:    "implement feature",
+			Task:          "implement feature",
 			GitClone: &api.GitCloneConfig{
 				URL:    "https://github.com/example/repo.git",
 				Branch: "develop",
@@ -1634,8 +1695,8 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_PropagatesProfile(t *testing.T)
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "claude",
-			Task:    "do something",
-			Profile: "custom-profile",
+			Task:          "do something",
+			Profile:       "custom-profile",
 		},
 	}
 
@@ -1788,7 +1849,7 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_EmptyProfile(t *testing.T) {
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "claude",
-			Task:    "do something",
+			Task:          "do something",
 		},
 	}
 
@@ -1857,8 +1918,8 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_NoGroveSlug_LocalPathGrove(t *t
 		GroveID:         "grove-local",
 		RuntimeBrokerID: "broker-1",
 		AppliedConfig: &store.AgentAppliedConfig{
-			HarnessConfig:   "claude",
-			Workspace: "/should/be/cleared",
+			HarnessConfig: "claude",
+			Workspace:     "/should/be/cleared",
 		},
 	}
 
@@ -2262,7 +2323,7 @@ func TestBuildCreateRequest_PropagatesHarnessName(t *testing.T) {
 		RuntimeBrokerID: "host-1",
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "gemini",
-			Task:    "do something",
+			Task:          "do something",
 		},
 	}
 

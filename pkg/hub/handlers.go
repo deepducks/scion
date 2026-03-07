@@ -53,8 +53,8 @@ type HealthResponse struct {
 
 type HealthStats struct {
 	ConnectedBrokers int `json:"connectedBrokers,omitempty"`
-	ActiveAgents   int `json:"activeAgents,omitempty"`
-	Groves         int `json:"groves,omitempty"`
+	ActiveAgents     int `json:"activeAgents,omitempty"`
+	Groves           int `json:"groves,omitempty"`
 }
 
 // GetHealthInfo returns the current health status of the Hub server.
@@ -169,20 +169,20 @@ type ListAgentsResponse struct {
 }
 
 type CreateAgentRequest struct {
-	Name          string            `json:"name"`
-	GroveID       string            `json:"groveId"`
+	Name            string            `json:"name"`
+	GroveID         string            `json:"groveId"`
 	RuntimeBrokerID string            `json:"runtimeBrokerId,omitempty"` // Optional: uses grove's default if not specified
-	Template      string            `json:"template"`
-	HarnessConfig       string            `json:"harnessConfig,omitempty"` // Explicit harness config name (used during sync when template may not be on Hub)
-	HarnessAuth         string            `json:"harnessAuth,omitempty"`   // Late-binding override for auth_selected_type
-	Profile       string            `json:"profile,omitempty"` // Settings profile for the runtime broker to use
-	Task          string            `json:"task,omitempty"`
-	Branch        string            `json:"branch,omitempty"`
-	Workspace     string            `json:"workspace,omitempty"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	Config        *api.ScionConfig `json:"config,omitempty"`
-	Attach        bool              `json:"attach,omitempty"` // If true, signals interactive attach mode to the broker/harness
-	ProvisionOnly bool              `json:"provisionOnly,omitempty"` // If true, provision only (write task to prompt.md) without starting
+	Template        string            `json:"template"`
+	HarnessConfig   string            `json:"harnessConfig,omitempty"` // Explicit harness config name (used during sync when template may not be on Hub)
+	HarnessAuth     string            `json:"harnessAuth,omitempty"`   // Late-binding override for auth_selected_type
+	Profile         string            `json:"profile,omitempty"`       // Settings profile for the runtime broker to use
+	Task            string            `json:"task,omitempty"`
+	Branch          string            `json:"branch,omitempty"`
+	Workspace       string            `json:"workspace,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+	Config          *api.ScionConfig  `json:"config,omitempty"`
+	Attach          bool              `json:"attach,omitempty"`        // If true, signals interactive attach mode to the broker/harness
+	ProvisionOnly   bool              `json:"provisionOnly,omitempty"` // If true, provision only (write task to prompt.md) without starting
 	// WorkspaceFiles is populated for non-git workspace bootstrap.
 	// When present, the Hub generates signed upload URLs instead of dispatching immediately.
 	WorkspaceFiles []transfer.FileInfo `json:"workspaceFiles,omitempty"`
@@ -192,7 +192,6 @@ type CreateAgentRequest struct {
 	// Notify subscribes the creating agent/user to status notifications for the new agent.
 	Notify bool `json:"notify,omitempty"`
 }
-
 
 type CreateAgentResponse struct {
 	Agent    *store.Agent `json:"agent"`
@@ -209,13 +208,13 @@ type CreateAgentResponse struct {
 
 // EnvGatherResponse contains env requirements relayed from the broker.
 type EnvGatherResponse struct {
-	AgentID     string                  `json:"agentId"`
-	Required    []string                `json:"required"`
-	HubHas      []EnvSource             `json:"hubHas"`
-	BrokerHas   []string                `json:"brokerHas"`
-	Needs       []string                `json:"needs"`
+	AgentID     string                   `json:"agentId"`
+	Required    []string                 `json:"required"`
+	HubHas      []EnvSource              `json:"hubHas"`
+	BrokerHas   []string                 `json:"brokerHas"`
+	Needs       []string                 `json:"needs"`
 	SecretInfo  map[string]SecretKeyInfo `json:"secretInfo,omitempty"`
-	HubWarnings []string                `json:"hubWarnings,omitempty"`
+	HubWarnings []string                 `json:"hubWarnings,omitempty"`
 }
 
 // EnvSource tracks which scope provided an env var key.
@@ -598,8 +597,8 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 					hubEnvGather := s.buildEnvGatherResponse(ctx, agent, envReqs)
 
 					writeJSON(w, http.StatusAccepted, CreateAgentResponse{
-						Agent:    agent,
-						Warnings: warnings,
+						Agent:     agent,
+						Warnings:  warnings,
 						EnvGather: hubEnvGather,
 					})
 					return
@@ -1612,30 +1611,30 @@ type CreateGroveRequest struct {
 }
 
 type RegisterGroveRequest struct {
-	ID       string              `json:"id,omitempty"` // Client-provided grove ID
-	Name     string              `json:"name"`
+	ID        string              `json:"id,omitempty"` // Client-provided grove ID
+	Name      string              `json:"name"`
 	GitRemote string              `json:"gitRemote"`
-	Path     string              `json:"path,omitempty"`
-	BrokerID string              `json:"brokerId,omitempty"` // Link to existing broker (two-phase flow)
-	Broker   *RegisterBrokerInfo `json:"broker,omitempty"`   // DEPRECATED: Use BrokerID with two-phase registration
-	Profiles []string            `json:"profiles,omitempty"`
-	Labels   map[string]string   `json:"labels,omitempty"`
+	Path      string              `json:"path,omitempty"`
+	BrokerID  string              `json:"brokerId,omitempty"` // Link to existing broker (two-phase flow)
+	Broker    *RegisterBrokerInfo `json:"broker,omitempty"`   // DEPRECATED: Use BrokerID with two-phase registration
+	Profiles  []string            `json:"profiles,omitempty"`
+	Labels    map[string]string   `json:"labels,omitempty"`
 }
 
 type RegisterBrokerInfo struct {
-	ID           string                  `json:"id,omitempty"`
-	Name         string                  `json:"name"`
-	Version      string                  `json:"version,omitempty"`
+	ID           string                    `json:"id,omitempty"`
+	Name         string                    `json:"name"`
+	Version      string                    `json:"version,omitempty"`
 	Capabilities *store.BrokerCapabilities `json:"capabilities,omitempty"`
 	Profiles     []store.BrokerProfile     `json:"profiles,omitempty"`
 }
 
 type RegisterGroveResponse struct {
-	Grove     *store.Grove       `json:"grove"`
-	Broker *store.RuntimeBroker `json:"broker,omitempty"`
-	Created   bool               `json:"created"`
-	BrokerToken string             `json:"brokerToken,omitempty"` // DEPRECATED: use two-phase registration
-	SecretKey string             `json:"secretKey,omitempty"` // DEPRECATED: secrets only from /brokers/join
+	Grove       *store.Grove         `json:"grove"`
+	Broker      *store.RuntimeBroker `json:"broker,omitempty"`
+	Created     bool                 `json:"created"`
+	BrokerToken string               `json:"brokerToken,omitempty"` // DEPRECATED: use two-phase registration
+	SecretKey   string               `json:"secretKey,omitempty"`   // DEPRECATED: secrets only from /brokers/join
 }
 
 // AddProviderRequest is the request for adding a broker as a grove provider.
@@ -1667,7 +1666,7 @@ func (s *Server) listGroves(w http.ResponseWriter, r *http.Request) {
 	filter := store.GroveFilter{
 		Visibility:      query.Get("visibility"),
 		GitRemotePrefix: util.NormalizeGitRemote(query.Get("gitRemote")),
-		BrokerID:          query.Get("brokerId"),
+		BrokerID:        query.Get("brokerId"),
 		Name:            query.Get("name"),
 		Slug:            query.Get("slug"),
 	}
@@ -2152,7 +2151,7 @@ func (s *Server) handleGroveRegister(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if err == store.ErrNotFound {
 				ValidationError(w, "brokerId not found: broker must be registered via POST /brokers and /brokers/join first", map[string]interface{}{
-					"field":  "brokerId",
+					"field":    "brokerId",
 					"brokerId": req.BrokerID,
 				})
 				return
@@ -2292,11 +2291,11 @@ func (s *Server) handleGroveRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, RegisterGroveResponse{
-		Grove:     grove,
-		Broker:    broker,
-		Created:   created,
+		Grove:       grove,
+		Broker:      broker,
+		Created:     created,
 		BrokerToken: brokerToken,
-		SecretKey: secretKey,
+		SecretKey:   secretKey,
 	})
 }
 
@@ -2714,8 +2713,8 @@ func (s *Server) createGroveAgent(w http.ResponseWriter, r *http.Request, groveI
 					hubEnvGather := s.buildEnvGatherResponse(ctx, agent, envReqs)
 
 					writeJSON(w, http.StatusAccepted, CreateAgentResponse{
-						Agent:    agent,
-						Warnings: warnings,
+						Agent:     agent,
+						Warnings:  warnings,
 						EnvGather: hubEnvGather,
 					})
 					return
@@ -3202,9 +3201,9 @@ func (s *Server) cleanupBrokerGroveDirectories(ctx context.Context, grove *store
 // ============================================================================
 
 type ListRuntimeBrokersResponse struct {
-	Brokers []store.RuntimeBroker `json:"brokers"`
-	NextCursor string              `json:"nextCursor,omitempty"`
-	TotalCount int                 `json:"totalCount"`
+	Brokers    []store.RuntimeBroker `json:"brokers"`
+	NextCursor string                `json:"nextCursor,omitempty"`
+	TotalCount int                   `json:"totalCount"`
 }
 
 // RuntimeBrokerWithProvider extends RuntimeBroker with grove-specific provider data.
@@ -3226,8 +3225,8 @@ type ListRuntimeBrokersWithProviderResponse struct {
 // ListRuntimeBrokersWithCapsResponse is the standard broker list response with capabilities.
 type ListRuntimeBrokersWithCapsResponse struct {
 	Brokers    []RuntimeBrokerWithCapabilities `json:"brokers"`
-	NextCursor string                           `json:"nextCursor,omitempty"`
-	TotalCount int                              `json:"totalCount"`
+	NextCursor string                          `json:"nextCursor,omitempty"`
+	TotalCount int                             `json:"totalCount"`
 }
 
 func (s *Server) handleRuntimeBrokers(w http.ResponseWriter, r *http.Request) {
@@ -3620,8 +3619,8 @@ func (s *Server) enrichBrokerCreatorNames(ctx context.Context, brokers []store.R
 
 // brokerHeartbeatRequest is the request body for broker heartbeats.
 type brokerHeartbeatRequest struct {
-	Status string                     `json:"status"`
-	Groves []brokerGroveHeartbeat     `json:"groves,omitempty"`
+	Status string                 `json:"status"`
+	Groves []brokerGroveHeartbeat `json:"groves,omitempty"`
 }
 
 // brokerGroveHeartbeat is per-grove status in a heartbeat.
@@ -3633,8 +3632,8 @@ type brokerGroveHeartbeat struct {
 
 // brokerAgentHeartbeat is per-agent status in a heartbeat.
 type brokerAgentHeartbeat struct {
-	Slug            string `json:"slug"`            // Agent's URL-safe identifier (name)
-	Status          string `json:"status"`          // Session status (IDLE, THINKING, etc.)
+	Slug            string `json:"slug"`   // Agent's URL-safe identifier (name)
+	Status          string `json:"status"` // Session status (IDLE, THINKING, etc.)
 	Phase           string `json:"phase,omitempty"`
 	Activity        string `json:"activity,omitempty"`
 	ContainerStatus string `json:"containerStatus,omitempty"`
@@ -4147,9 +4146,9 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id string) {
 	}
 
 	var updates struct {
-		DisplayName string                  `json:"displayName,omitempty"`
-		Role        string                  `json:"role,omitempty"`
-		Status      string                  `json:"status,omitempty"`
+		DisplayName string                 `json:"displayName,omitempty"`
+		Role        string                 `json:"role,omitempty"`
+		Status      string                 `json:"status,omitempty"`
 		Preferences *store.UserPreferences `json:"preferences,omitempty"`
 	}
 
@@ -4657,8 +4656,8 @@ type SetSecretRequest struct {
 	ScopeID       string `json:"scopeId,omitempty"`
 	Description   string `json:"description,omitempty"`
 	InjectionMode string `json:"injectionMode,omitempty"` // "always" or "as_needed" (default: as_needed)
-	Type          string `json:"type,omitempty"`           // environment (default), variable, file
-	Target        string `json:"target,omitempty"`         // Projection target (defaults to key)
+	Type          string `json:"type,omitempty"`          // environment (default), variable, file
+	Target        string `json:"target,omitempty"`        // Projection target (defaults to key)
 }
 
 type SetSecretResponse struct {
@@ -5498,7 +5497,7 @@ func (s *Server) addGroveProvider(w http.ResponseWriter, r *http.Request, groveI
 	if err != nil {
 		if err == store.ErrNotFound {
 			ValidationError(w, "brokerId not found", map[string]interface{}{
-				"field":  "brokerId",
+				"field":    "brokerId",
 				"brokerId": req.BrokerID,
 			})
 			return
@@ -6058,13 +6057,13 @@ func (s *Server) getHarnessConfigFromTemplate(template *store.Template, fallback
 // and the full ScionConfig is preserved as InlineConfig for threading to the broker.
 func (s *Server) buildAppliedConfig(req CreateAgentRequest, harnessConfig string, creatorName string) *store.AgentAppliedConfig {
 	ac := &store.AgentAppliedConfig{
-		Profile:     req.Profile,
-		HarnessConfig:     harnessConfig,
-		HarnessAuth:       req.HarnessAuth,
-		Task:        req.Task,
-		Attach:      req.Attach,
-		Workspace:   req.Workspace,
-		CreatorName: creatorName,
+		Profile:       req.Profile,
+		HarnessConfig: harnessConfig,
+		HarnessAuth:   req.HarnessAuth,
+		Task:          req.Task,
+		Attach:        req.Attach,
+		Workspace:     req.Workspace,
+		CreatorName:   creatorName,
 	}
 
 	if req.Config != nil {
@@ -6314,6 +6313,7 @@ func (s *Server) handleExistingAgent(
 //  3. Single provider (any status) - used automatically
 //  4. Multiple providers with online brokers - returns error requiring explicit selection
 //  5. No providers - returns error
+//
 // Returns the runtime broker ID or an error (after writing the HTTP error response).
 func (s *Server) resolveRuntimeBroker(ctx context.Context, w http.ResponseWriter, requestedBrokerID string, grove *store.Grove) (string, error) {
 	// Get ALL providers for this grove (regardless of status)
@@ -6435,15 +6435,13 @@ func (s *Server) resolveRuntimeBroker(ctx context.Context, w http.ResponseWriter
 		return "", store.ErrNotFound
 	}
 
-	// Case 3: No default and no explicit broker - check for single provider
-	// If there's exactly one provider, use it regardless of online status
-	// (the dispatch will fail gracefully if the broker is truly unavailable)
+	// Case 3: No default and no explicit broker - auto-select only when there is
+	// exactly one provider and its broker is online and dispatchable.
 	if len(allProviders) == 1 {
 		broker, brokerErr := s.store.GetRuntimeBroker(ctx, allProviders[0].BrokerID)
-		if brokerErr == nil && s.canDispatchToBroker(ctx, broker) {
+		if brokerErr == nil && broker.Status == store.BrokerStatusOnline && s.canDispatchToBroker(ctx, broker) {
 			return allProviders[0].BrokerID, nil
 		}
-		// Single provider but user can't dispatch
 		NoRuntimeBroker(w, "No runtime brokers available for this grove that you have permission to use", brokerSummaries)
 		return "", store.ErrNotFound
 	}

@@ -177,10 +177,10 @@ func TestAgentList(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		agent := &store.Agent{
 			ID:           "agent_" + string(rune('a'+i)),
-			Slug:      "test-agent-" + string(rune('a'+i)),
+			Slug:         "test-agent-" + string(rune('a'+i)),
 			Name:         "Test Agent " + string(rune('A'+i)),
 			GroveID:      grove.ID,
-			Phase: string(state.PhaseStopped),
+			Phase:        string(state.PhaseStopped),
 			StateVersion: 1,
 			Created:      time.Now(),
 			Updated:      time.Now(),
@@ -219,7 +219,7 @@ func TestAgentCreate(t *testing.T) {
 		ID:     "host_test123",
 		Slug:   "test-host",
 		Name:   "Test Host",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker); err != nil {
 		t.Fatalf("failed to create runtime broker: %v", err)
@@ -227,13 +227,13 @@ func TestAgentCreate(t *testing.T) {
 
 	// Create a grove with default runtime broker
 	grove := &store.Grove{
-		ID:                   "grove_abc123",
-		Slug:                 "my-grove",
-		Name:                 "My Grove",
-		GitRemote:            "github.com/test/repo",
+		ID:                     "grove_abc123",
+		Slug:                   "my-grove",
+		Name:                   "My Grove",
+		GitRemote:              "github.com/test/repo",
 		DefaultRuntimeBrokerID: broker.ID,
-		Created:              time.Now(),
-		Updated:              time.Now(),
+		Created:                time.Now(),
+		Updated:                time.Now(),
 	}
 	if err := s.CreateGrove(ctx, grove); err != nil {
 		t.Fatalf("failed to create grove: %v", err)
@@ -241,10 +241,10 @@ func TestAgentCreate(t *testing.T) {
 
 	// Register the broker as a provider to the grove
 	contrib := &store.GroveProvider{
-		GroveID:  grove.ID,
+		GroveID:    grove.ID,
 		BrokerID:   broker.ID,
 		BrokerName: broker.Name,
-				Status:   store.BrokerStatusOnline,
+		Status:     store.BrokerStatusOnline,
 	}
 	if err := s.AddGroveProvider(ctx, contrib); err != nil {
 		t.Fatalf("failed to add grove provider: %v", err)
@@ -507,7 +507,7 @@ func TestAgentCreate_SingleProvider(t *testing.T) {
 		ID:     "host_single",
 		Slug:   "single-host",
 		Name:   "Single Host",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker); err != nil {
 		t.Fatalf("failed to create runtime broker: %v", err)
@@ -529,10 +529,10 @@ func TestAgentCreate_SingleProvider(t *testing.T) {
 
 	// Register the broker as the only provider to the grove
 	contrib := &store.GroveProvider{
-		GroveID:  grove.ID,
+		GroveID:    grove.ID,
 		BrokerID:   broker.ID,
 		BrokerName: broker.Name,
-				Status:   store.BrokerStatusOnline,
+		Status:     store.BrokerStatusOnline,
 	}
 	if err := s.AddGroveProvider(ctx, contrib); err != nil {
 		t.Fatalf("failed to add grove provider: %v", err)
@@ -561,6 +561,63 @@ func TestAgentCreate_SingleProvider(t *testing.T) {
 	}
 }
 
+// TestAgentCreate_SingleOfflineProvider ensures a single provider is not auto-selected
+// unless it is online.
+func TestAgentCreate_SingleOfflineProvider(t *testing.T) {
+	srv, s := testServer(t)
+	ctx := context.Background()
+
+	broker := &store.RuntimeBroker{
+		ID:     "host_single_offline",
+		Slug:   "single-host-offline",
+		Name:   "Single Host Offline",
+		Status: store.BrokerStatusOffline,
+	}
+	if err := s.CreateRuntimeBroker(ctx, broker); err != nil {
+		t.Fatalf("failed to create runtime broker: %v", err)
+	}
+
+	grove := &store.Grove{
+		ID:        "grove_single_offline",
+		Slug:      "single-grove-offline",
+		Name:      "Single Grove Offline",
+		GitRemote: "github.com/test/single-offline",
+		Created:   time.Now(),
+		Updated:   time.Now(),
+	}
+	if err := s.CreateGrove(ctx, grove); err != nil {
+		t.Fatalf("failed to create grove: %v", err)
+	}
+
+	contrib := &store.GroveProvider{
+		GroveID:    grove.ID,
+		BrokerID:   broker.ID,
+		BrokerName: broker.Name,
+		Status:     store.BrokerStatusOffline,
+	}
+	if err := s.AddGroveProvider(ctx, contrib); err != nil {
+		t.Fatalf("failed to add grove provider: %v", err)
+	}
+
+	body := map[string]interface{}{
+		"name":    "No Auto Resolve Agent",
+		"groveId": grove.ID,
+	}
+
+	rec := doRequest(t, srv, http.MethodPost, "/api/v1/agents", body)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var errResp ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if errResp.Error.Code != ErrCodeNoRuntimeBroker {
+		t.Fatalf("expected error code %q, got %q", ErrCodeNoRuntimeBroker, errResp.Error.Code)
+	}
+}
+
 // TestAgentCreate_MultipleProviders tests that when a grove has multiple online providers
 // but no default runtime broker, an error is returned requiring explicit selection.
 func TestAgentCreate_MultipleProviders(t *testing.T) {
@@ -572,7 +629,7 @@ func TestAgentCreate_MultipleProviders(t *testing.T) {
 		ID:     "host_multi1",
 		Slug:   "multi-host-1",
 		Name:   "Multi Host 1",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker1); err != nil {
 		t.Fatalf("failed to create runtime broker 1: %v", err)
@@ -582,7 +639,7 @@ func TestAgentCreate_MultipleProviders(t *testing.T) {
 		ID:     "host_multi2",
 		Slug:   "multi-host-2",
 		Name:   "Multi Host 2",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker2); err != nil {
 		t.Fatalf("failed to create runtime broker 2: %v", err)
@@ -674,10 +731,10 @@ func TestAgentGetByID(t *testing.T) {
 
 	agent := &store.Agent{
 		ID:           "agent_test1",
-		Slug:      "test-agent",
+		Slug:         "test-agent",
 		Name:         "Test Agent",
 		GroveID:      grove.ID,
-		Phase: string(state.PhaseStopped),
+		Phase:        string(state.PhaseStopped),
 		StateVersion: 1,
 		Created:      time.Now(),
 		Updated:      time.Now(),
@@ -740,10 +797,10 @@ func TestAgentDelete(t *testing.T) {
 
 	agent := &store.Agent{
 		ID:           "agent_delete",
-		Slug:      "delete-me",
+		Slug:         "delete-me",
 		Name:         "Delete Me",
 		GroveID:      grove.ID,
-		Phase: string(state.PhaseStopped),
+		Phase:        string(state.PhaseStopped),
 		StateVersion: 1,
 		Created:      time.Now(),
 		Updated:      time.Now(),
@@ -995,7 +1052,7 @@ func TestGroveRegisterWithBrokerID(t *testing.T) {
 		ID:     "host_twophase_test",
 		Name:   "Two Phase Test Host",
 		Slug:   "two-phase-test-host",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker); err != nil {
 		t.Fatalf("failed to create runtime broker: %v", err)
@@ -1005,7 +1062,7 @@ func TestGroveRegisterWithBrokerID(t *testing.T) {
 	body := map[string]interface{}{
 		"name":      "Two Phase Grove",
 		"gitRemote": "https://github.com/test/twophase-grove",
-		"brokerId":    broker.ID,
+		"brokerId":  broker.ID,
 		"path":      "/path/to/project/.scion",
 	}
 
@@ -1062,7 +1119,7 @@ func TestGroveRegisterWithInvalidBrokerID(t *testing.T) {
 	body := map[string]interface{}{
 		"name":      "Invalid Host Grove",
 		"gitRemote": "https://github.com/test/invalid-host-grove",
-		"brokerId":    "non-existent-host-id",
+		"brokerId":  "non-existent-host-id",
 	}
 
 	rec := doRequest(t, srv, http.MethodPost, "/api/v1/groves/register", body)
@@ -1102,7 +1159,7 @@ func TestAddProvider(t *testing.T) {
 		ID:     "host_contrib_test",
 		Name:   "Provider Test Host",
 		Slug:   "contrib-test-host",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker); err != nil {
 		t.Fatalf("failed to create runtime broker: %v", err)
@@ -1110,7 +1167,7 @@ func TestAddProvider(t *testing.T) {
 
 	// Add provider via API
 	body := map[string]interface{}{
-		"brokerId":    broker.ID,
+		"brokerId":  broker.ID,
 		"localPath": "/home/user/project/.scion",
 		"mode":      "connected",
 	}
@@ -1166,18 +1223,18 @@ func TestListProviders(t *testing.T) {
 		ID:     "host_list_contrib",
 		Name:   "List Providers Host",
 		Slug:   "list-contrib-host",
-				Status: store.BrokerStatusOnline,
+		Status: store.BrokerStatusOnline,
 	}
 	if err := s.CreateRuntimeBroker(ctx, broker); err != nil {
 		t.Fatalf("failed to create runtime broker: %v", err)
 	}
 
 	contrib := &store.GroveProvider{
-		GroveID:   grove.ID,
-		BrokerID:    broker.ID,
-		BrokerName:  broker.Name,
-		LocalPath: "/test/path",
-				Status:    store.BrokerStatusOnline,
+		GroveID:    grove.ID,
+		BrokerID:   broker.ID,
+		BrokerName: broker.Name,
+		LocalPath:  "/test/path",
+		Status:     store.BrokerStatusOnline,
 	}
 	if err := s.AddGroveProvider(ctx, contrib); err != nil {
 		t.Fatalf("failed to add provider: %v", err)
@@ -1247,7 +1304,7 @@ func TestRuntimeBrokerList(t *testing.T) {
 		ID:            "host_test1",
 		Name:          "Test Host",
 		Slug:          "test-host",
-				Status:        store.BrokerStatusOnline,
+		Status:        store.BrokerStatusOnline,
 		LastHeartbeat: time.Now(),
 		Created:       time.Now(),
 		Updated:       time.Now(),
@@ -1458,7 +1515,7 @@ func TestRuntimeBrokerGetByID(t *testing.T) {
 		ID:            "host_gettest",
 		Name:          "Get Test Host",
 		Slug:          "get-test-host",
-				Status:        store.BrokerStatusOnline,
+		Status:        store.BrokerStatusOnline,
 		LastHeartbeat: time.Now(),
 		Created:       time.Now(),
 		Updated:       time.Now(),
@@ -1691,7 +1748,7 @@ func TestRuntimeBrokerListWithGroveLocalPath(t *testing.T) {
 		ID:            "host_localpath_test",
 		Name:          "Local Path Test Host",
 		Slug:          "local-path-test-host",
-				Status:        store.BrokerStatusOnline,
+		Status:        store.BrokerStatusOnline,
 		LastHeartbeat: time.Now(),
 		Created:       time.Now(),
 		Updated:       time.Now(),
@@ -1702,11 +1759,11 @@ func TestRuntimeBrokerListWithGroveLocalPath(t *testing.T) {
 
 	// Add broker as grove provider with a local path
 	contrib := &store.GroveProvider{
-		GroveID:   grove.ID,
-		BrokerID:    broker.ID,
-		BrokerName:  broker.Name,
-		LocalPath: "/path/to/project/.scion",
-				Status:    store.BrokerStatusOnline,
+		GroveID:    grove.ID,
+		BrokerID:   broker.ID,
+		BrokerName: broker.Name,
+		LocalPath:  "/path/to/project/.scion",
+		Status:     store.BrokerStatusOnline,
 	}
 	if err := s.AddGroveProvider(ctx, contrib); err != nil {
 		t.Fatalf("failed to add grove provider: %v", err)
@@ -1808,7 +1865,7 @@ func TestBrokerRegistrationTwoPhaseFlow(t *testing.T) {
 
 	// Phase 2: Complete broker join (unauthenticated - join token is auth)
 	joinBody := map[string]interface{}{
-		"brokerId":       createResp.BrokerID,
+		"brokerId":     createResp.BrokerID,
 		"joinToken":    createResp.JoinToken,
 		"hostname":     "test-machine",
 		"version":      "1.0.0",
@@ -1836,7 +1893,7 @@ func TestBrokerRegistrationTwoPhaseFlow(t *testing.T) {
 	groveBody := map[string]interface{}{
 		"name":      "Two Phase Grove",
 		"gitRemote": "https://github.com/test/twophase",
-		"brokerId":    joinResp.BrokerID,
+		"brokerId":  joinResp.BrokerID,
 	}
 
 	rec3 := doRequest(t, srv, http.MethodPost, "/api/v1/groves/register", groveBody)
@@ -1884,7 +1941,7 @@ func TestBrokerJoinWithInvalidToken(t *testing.T) {
 
 	// Try to join with invalid token
 	joinBody := map[string]interface{}{
-		"brokerId":    createResp.BrokerID,
+		"brokerId":  createResp.BrokerID,
 		"joinToken": "invalid_token",
 		"hostname":  "test-machine",
 	}

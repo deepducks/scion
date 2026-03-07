@@ -78,7 +78,7 @@ func (c *AuthenticatedBrokerClient) signRequest(ctx context.Context, req *http.R
 
 	// Use the shared HMAC auth implementation
 	auth := &apiclient.HMACAuth{
-		BrokerID:    brokerID,
+		BrokerID:  brokerID,
 		SecretKey: secret,
 	}
 
@@ -106,7 +106,7 @@ func (c *AuthenticatedBrokerClient) doRequest(ctx context.Context, brokerID, met
 		if c.debug {
 			slog.Warn("Failed to sign request", "brokerID", brokerID, "error", err)
 		}
-		// Continue without authentication - the broker may reject or allow depending on its config
+		return nil, fmt.Errorf("failed to sign request: %w", err)
 	} else if c.debug {
 		slog.Debug("Signed request for broker", "brokerID", brokerID)
 	}
@@ -190,9 +190,18 @@ func (c *AuthenticatedBrokerClient) StartAgent(ctx context.Context, brokerID, br
 		return nil, fmt.Errorf("runtime broker returned error %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var result RemoteAgentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, nil
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		bodySnippet := string(respBody)
+		if len(bodySnippet) > 256 {
+			bodySnippet = bodySnippet[:256] + "...(truncated)"
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (body=%q)", err, bodySnippet)
 	}
 
 	return &result, nil
