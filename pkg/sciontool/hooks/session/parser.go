@@ -218,6 +218,11 @@ func FindLatestSession(sessionDir string) (string, error) {
 
 // DefaultSessionDir returns the default Gemini session directory.
 func DefaultSessionDir() string {
+	// Priority 1: Check if /home/scion exists (standard agent home)
+	if _, err := os.Stat("/home/scion"); err == nil {
+		return filepath.Join("/home/scion", ".gemini", "sessions")
+	}
+	// Priority 2: Use HOME env var
 	home := os.Getenv("HOME")
 	if home == "" {
 		home = "/home/scion"
