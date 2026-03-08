@@ -533,8 +533,8 @@ func TestClaudeApplyAuthSettings_APIKey(t *testing.T) {
 	if !ok || len(approved) != 1 {
 		t.Fatalf("expected 1 approved entry, got %v", responses["approved"])
 	}
-	// Last 20 chars of the key
-	want := "BdRv1sHkmSw-k3bQnAAA"
+	// Key is shorter than 20 chars, so the whole key is used as fingerprint
+	want := "REMOVED_API_KEY"
 	if approved[0] != want {
 		t.Errorf("approved fingerprint = %q, want %q", approved[0], want)
 	}
