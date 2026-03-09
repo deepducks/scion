@@ -264,6 +264,74 @@ func TestCountAgents_NonExistentDir(t *testing.T) {
 	}
 }
 
+func TestListAgentNames(t *testing.T) {
+	tmpDir := t.TempDir()
+	agentsDir := filepath.Join(tmpDir, "agents")
+	os.MkdirAll(filepath.Join(agentsDir, "agent-a"), 0755)
+	os.MkdirAll(filepath.Join(agentsDir, "agent-b"), 0755)
+	os.MkdirAll(filepath.Join(agentsDir, ".hidden"), 0755)
+
+	names := ListAgentNames(agentsDir)
+	if len(names) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(names))
+	}
+	nameSet := map[string]bool{}
+	for _, n := range names {
+		nameSet[n] = true
+	}
+	if !nameSet["agent-a"] || !nameSet["agent-b"] {
+		t.Errorf("expected agent-a and agent-b, got %v", names)
+	}
+}
+
+func TestListAgentNames_NonExistentDir(t *testing.T) {
+	names := ListAgentNames("/nonexistent/agents")
+	if names != nil {
+		t.Errorf("expected nil, got %v", names)
+	}
+}
+
+func TestGroveInfo_AgentsDir(t *testing.T) {
+	tests := []struct {
+		name     string
+		grove    GroveInfo
+		expected string
+	}{
+		{
+			name: "external grove",
+			grove: GroveInfo{
+				Type:       GroveTypeExternal,
+				ConfigPath: "/home/user/.scion/grove-configs/proj__abc123/.scion",
+			},
+			expected: "/home/user/.scion/grove-configs/proj__abc123/.scion/agents",
+		},
+		{
+			name: "git grove",
+			grove: GroveInfo{
+				Type:       GroveTypeGit,
+				ConfigPath: "/home/user/.scion/grove-configs/repo__def456/.scion",
+			},
+			expected: "/home/user/.scion/grove-configs/repo__def456/agents",
+		},
+		{
+			name: "global grove",
+			grove: GroveInfo{
+				Type:       GroveTypeGlobal,
+				ConfigPath: "/home/user/.scion",
+			},
+			expected: "/home/user/.scion/agents",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.grove.AgentsDir()
+			if got != tt.expected {
+				t.Errorf("AgentsDir() = %s, want %s", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestDiscoverGroves_StaleExternalAfterMarkerRecreate(t *testing.T) {
 	tmpHome := t.TempDir()
 	origHome := os.Getenv("HOME")

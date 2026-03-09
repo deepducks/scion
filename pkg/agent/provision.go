@@ -129,6 +129,45 @@ func DeleteAgentFiles(agentName string, grovePath string, removeBranch bool) (bo
 	return branchDeleted, nil
 }
 
+// StopGroveContainers finds and removes containers belonging to the given grove
+// that match the provided agent names. This is used during grove pruning to
+// clean up containers before removing the grove config directory.
+func StopGroveContainers(ctx context.Context, mgr Manager, groveName string, agentNames []string) []string {
+	containers, err := mgr.List(ctx, map[string]string{
+		"scion.agent": "true",
+		"scion.grove": groveName,
+	})
+	if err != nil {
+		util.Debugf("StopGroveContainers: failed to list containers for grove %s: %v", groveName, err)
+		return nil
+	}
+
+	nameSet := make(map[string]bool, len(agentNames))
+	for _, n := range agentNames {
+		nameSet[n] = true
+	}
+
+	var stopped []string
+	for _, c := range containers {
+		agentName := c.Labels["scion.name"]
+		if agentName == "" {
+			agentName = strings.TrimPrefix(c.Name, "/")
+		}
+		if !nameSet[agentName] || c.ContainerID == "" {
+			continue
+		}
+		util.Debugf("StopGroveContainers: removing container %s (agent %s, grove %s)", c.ContainerID, agentName, groveName)
+		// Use Delete with deleteFiles=false — we only want to remove the container,
+		// not the filesystem artifacts (those will be removed by RemoveGroveConfig).
+		if _, err := mgr.Delete(ctx, c.ContainerID, false, "", false); err != nil {
+			util.Debugf("StopGroveContainers: failed to remove container for agent %s: %v", agentName, err)
+		} else {
+			stopped = append(stopped, agentName)
+		}
+	}
+	return stopped
+}
+
 func (m *AgentManager) Provision(ctx context.Context, opts api.StartOptions) (*api.ScionConfig, error) {
 	if opts.GitClone != nil {
 		ctx = api.ContextWithGitClone(ctx, opts.GitClone)

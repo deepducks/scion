@@ -16,11 +16,14 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/ptone/scion-agent/pkg/agent"
 	"github.com/ptone/scion-agent/pkg/config"
+	"github.com/ptone/scion-agent/pkg/runtime"
 	"github.com/ptone/scion-agent/pkg/util"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +34,9 @@ var grovePruneCmd = &cobra.Command{
 	Long: `Detect and remove grove configs in ~/.scion/grove-configs/ whose
 workspaces no longer exist. This cleans up leftover configuration from
 deleted or moved projects.
+
+Any running agent containers belonging to orphaned groves will be stopped
+and removed before the grove config is deleted.
 
 Use 'scion grove list' to see all groves and their status first.
 Use 'scion grove reconnect' to fix a grove whose workspace moved.`,
@@ -74,6 +80,7 @@ Use 'scion grove reconnect' to fix a grove whose workspace moved.`,
 
 			var removed []string
 			for _, g := range orphaned {
+				cleanupOrphanedGrove(g)
 				if err := config.RemoveGroveConfig(g.ConfigPath); err != nil {
 					return fmt.Errorf("failed to remove %s: %w", g.ConfigPath, err)
 				}
@@ -99,7 +106,7 @@ Use 'scion grove reconnect' to fix a grove whose workspace moved.`,
 			fmt.Printf("    Config: %s\n", g.ConfigPath)
 			fmt.Printf("    Workspace: %s\n", workspace)
 			if g.AgentCount > 0 {
-				fmt.Printf("    Agents: %d (will be removed)\n", g.AgentCount)
+				fmt.Printf("    Agents: %d (containers will be stopped and removed)\n", g.AgentCount)
 			}
 			fmt.Println()
 		}
@@ -124,6 +131,7 @@ Use 'scion grove reconnect' to fix a grove whose workspace moved.`,
 		}
 
 		for _, g := range orphaned {
+			cleanupOrphanedGrove(g)
 			if err := config.RemoveGroveConfig(g.ConfigPath); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", g.Name, err)
 				continue
@@ -133,6 +141,29 @@ Use 'scion grove reconnect' to fix a grove whose workspace moved.`,
 
 		return nil
 	},
+}
+
+// cleanupOrphanedGrove stops any running containers for the orphaned grove's
+// agents before the grove config is removed. Errors are best-effort and logged
+// as warnings.
+func cleanupOrphanedGrove(g config.GroveInfo) {
+	if g.AgentCount == 0 {
+		return
+	}
+
+	agentNames := config.ListAgentNames(g.AgentsDir())
+	if len(agentNames) == 0 {
+		return
+	}
+
+	rt := runtime.GetRuntime("", profile)
+	mgr := agent.NewManager(rt)
+	ctx := context.Background()
+
+	stopped := agent.StopGroveContainers(ctx, mgr, g.Name, agentNames)
+	for _, name := range stopped {
+		fmt.Fprintf(os.Stderr, "Stopped container for agent '%s'\n", name)
+	}
 }
 
 func init() {

@@ -48,6 +48,20 @@ type GroveInfo struct {
 	AgentCount    int         `json:"agent_count"`
 }
 
+// AgentsDir returns the path to the agents directory for this grove.
+func (g GroveInfo) AgentsDir() string {
+	switch g.Type {
+	case GroveTypeExternal:
+		return filepath.Join(g.ConfigPath, "agents")
+	case GroveTypeGit:
+		// Git grove external dir: <grove-configs>/<slug__uuid>/agents/
+		return filepath.Join(filepath.Dir(g.ConfigPath), "agents")
+	case GroveTypeGlobal:
+		return filepath.Join(g.ConfigPath, "agents")
+	}
+	return ""
+}
+
 // DiscoverGroves scans for all known groves on this machine.
 // It checks the global grove, then scans ~/.scion/grove-configs/ for
 // external and git grove configs.
@@ -213,17 +227,22 @@ func isValidWorkspace(workspacePath, expectedGroveID string, configPath ...strin
 
 // countAgents counts agent subdirectories in an agents directory.
 func countAgents(agentsDir string) int {
+	return len(ListAgentNames(agentsDir))
+}
+
+// ListAgentNames returns the names of agent subdirectories in an agents directory.
+func ListAgentNames(agentsDir string) []string {
 	entries, err := os.ReadDir(agentsDir)
 	if err != nil {
-		return 0
+		return nil
 	}
-	count := 0
+	var names []string
 	for _, e := range entries {
 		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-			count++
+			names = append(names, e.Name())
 		}
 	}
-	return count
+	return names
 }
 
 // FindOrphanedGroveConfigs returns grove configs that are orphaned
