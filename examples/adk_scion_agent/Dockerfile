@@ -27,7 +27,7 @@
 # At runtime, scion wraps CMD in a tmux session so that `scion message` can
 # deliver user input via send-keys into ADK's interactive input() loop.
 
-ARG BASE_IMAGE=us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-base:latest
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 USER root

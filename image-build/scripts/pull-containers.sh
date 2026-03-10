@@ -18,14 +18,12 @@ set -euo pipefail
 # Pull all scion container images from a registry.
 #
 # Usage:
-#   pull-containers.sh [--registry <registry>] [--tag <tag>] [runtime]
+#   pull-containers.sh --registry <registry> [--tag <tag>] [runtime]
 #
 # Examples:
-#   pull-containers.sh                                        # default upstream registry
-#   pull-containers.sh --registry ghcr.io/myorg               # custom registry
-#   pull-containers.sh --registry ghcr.io/myorg --tag v1.0    # custom tag
+#   pull-containers.sh --registry ghcr.io/myorg               # pull from registry
+#   pull-containers.sh --registry ghcr.io/myorg --tag v1.0    # specific tag
 
-DEFAULT_REGISTRY="us-central1-docker.pkg.dev/ptone-misc/public-docker"
 REGISTRY=""
 TAG="latest"
 RUNTIME_ARG=""
@@ -35,10 +33,12 @@ while [[ $# -gt 0 ]]; do
     --registry) REGISTRY="$2"; shift 2 ;;
     --tag)      TAG="$2"; shift 2 ;;
     -h|--help)
-      echo "Usage: $(basename "$0") [--registry <registry>] [--tag <tag>] [runtime]"
+      echo "Usage: $(basename "$0") --registry <registry> [--tag <tag>] [runtime]"
+      echo ""
+      echo "Required:"
+      echo "  --registry <path>  Registry path (e.g., ghcr.io/myorg)"
       echo ""
       echo "Options:"
-      echo "  --registry <path>  Registry path (default: ${DEFAULT_REGISTRY})"
       echo "  --tag <tag>        Image tag (default: latest)"
       echo "  runtime            Container runtime: docker, podman, container (auto-detected)"
       exit 0
@@ -48,7 +48,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-REGISTRY="${REGISTRY:-${DEFAULT_REGISTRY}}"
+if [[ -z "${REGISTRY}" ]]; then
+  echo "Error: --registry is required"
+  echo "Usage: $(basename "$0") --registry <registry> [--tag <tag>] [runtime]"
+  exit 1
+fi
 REGISTRY="${REGISTRY%/}"
 
 IMAGES=(

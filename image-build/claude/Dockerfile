@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BASE_IMAGE=us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-base
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG TZ

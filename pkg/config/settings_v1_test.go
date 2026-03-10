@@ -2283,30 +2283,30 @@ runtimes:
     kubernetes: {}
 harnesses:
     claude:
-        image: us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-claude:latest
+        image: us-central1-docker.pkg.dev/example-project/scion-images/scion-claude:latest
         user: scion
     codex:
-        image: us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-codex:latest
+        image: us-central1-docker.pkg.dev/example-project/scion-images/scion-codex:latest
         user: scion
     gemini:
-        image: us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-gemini:latest
+        image: us-central1-docker.pkg.dev/example-project/scion-images/scion-gemini:latest
         user: scion
     opencode:
-        image: us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-opencode:latest
+        image: us-central1-docker.pkg.dev/example-project/scion-images/scion-opencode:latest
         user: scion
 profiles:
     local:
         runtime: container
         tmux: true
         env:
-            GIT_AUTHOR_EMAIL: ptone@google.com
-            GIT_AUTHOR_NAME: Preston Holmes
-            GIT_COMMITTER_EMAIL: ptone@google.com
-            GIT_COMMITTER_NAME: Preston Holmes
+            GIT_AUTHOR_EMAIL: dev@example.com
+            GIT_AUTHOR_NAME: Test User
+            GIT_COMMITTER_EMAIL: dev@example.com
+            GIT_COMMITTER_NAME: Test User
         volumes:
             - source: ${GOPATH}/pkg
               target: /home/scion/go/pkg
-            - source: /Users/ptone/Library/Caches/go-build
+            - source: /home/dev/.cache/go-build
               target: /home/scion/.cache/go-build
     remote:
         runtime: kubernetes
@@ -2374,7 +2374,7 @@ profiles:
 	assert.Len(t, vs.Profiles, 2)
 	assert.Equal(t, "container", vs.Profiles["local"].Runtime)
 	assert.Equal(t, "kubernetes", vs.Profiles["remote"].Runtime)
-	assert.Equal(t, "ptone@google.com", vs.Profiles["local"].Env["GIT_AUTHOR_EMAIL"])
+	assert.Equal(t, "dev@example.com", vs.Profiles["local"].Env["GIT_AUTHOR_EMAIL"])
 	assert.Len(t, vs.Profiles["local"].Volumes, 2)
 
 	// Check deprecation warnings
@@ -3088,13 +3088,13 @@ func TestRewriteImageRegistry(t *testing.T) {
 	}{
 		{
 			name:        "rewrite scion image",
-			fullImage:   "us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-claude:latest",
+			fullImage:   "us-central1-docker.pkg.dev/example-project/scion-images/scion-claude:latest",
 			newRegistry: "ghcr.io/myorg",
 			want:        "ghcr.io/myorg/scion-claude:latest",
 		},
 		{
 			name:        "rewrite with trailing slash",
-			fullImage:   "us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-gemini:latest",
+			fullImage:   "us-central1-docker.pkg.dev/example-project/scion-images/scion-gemini:latest",
 			newRegistry: "ghcr.io/myorg/",
 			want:        "ghcr.io/myorg/scion-gemini:latest",
 		},
@@ -3112,9 +3112,9 @@ func TestRewriteImageRegistry(t *testing.T) {
 		},
 		{
 			name:        "empty registry returns original",
-			fullImage:   "us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-claude:latest",
+			fullImage:   "us-central1-docker.pkg.dev/example-project/scion-images/scion-claude:latest",
 			newRegistry: "",
-			want:        "us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-claude:latest",
+			want:        "us-central1-docker.pkg.dev/example-project/scion-images/scion-claude:latest",
 		},
 		{
 			name:        "empty image returns empty",
@@ -3124,13 +3124,13 @@ func TestRewriteImageRegistry(t *testing.T) {
 		},
 		{
 			name:        "scion-base image is rewritten",
-			fullImage:   "us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-base:v2",
+			fullImage:   "us-central1-docker.pkg.dev/example-project/scion-images/scion-base:v2",
 			newRegistry: "docker.io/myuser",
 			want:        "docker.io/myuser/scion-base:v2",
 		},
 		{
 			name:        "preserves tag",
-			fullImage:   "us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-opencode:sha-abc123",
+			fullImage:   "us-central1-docker.pkg.dev/example-project/scion-images/scion-opencode:sha-abc123",
 			newRegistry: "ghcr.io/myorg",
 			want:        "ghcr.io/myorg/scion-opencode:sha-abc123",
 		},

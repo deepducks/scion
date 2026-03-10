@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-Scion's container images are currently published to a project-specific GCP Artifact Registry (`us-central1-docker.pkg.dev/ptone-misc/public-docker/`). This registry path is hardcoded into every harness-config's `config.yaml` and the `image-build/` build scripts. New users who want to run Scion must either:
+Scion's container images were originally published to a project-specific GCP Artifact Registry. The registry path was hardcoded into every harness-config's `config.yaml` and the `image-build/` build scripts. New users who wanted to run Scion had to either:
 
 1. Use the pre-built images from the upstream registry (which may not always be public or up-to-date), or
 2. Manually edit multiple harness-config files and build scripts to point to their own registry.
@@ -26,7 +26,7 @@ core-base  (Go, Git, Node, Python, gcloud — rarely changes)
 ### Where Images Are Referenced
 | Location | Example | Count |
 |----------|---------|-------|
-| `pkg/harness/claude/embeds/config.yaml` | `image: us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-claude:latest` | 4 files (one per harness) |
+| `pkg/harness/claude/embeds/config.yaml` | `image: scion-claude:latest` | 4 files (one per harness) |
 | `image-build/cloudbuild*.yaml` | `$_REGISTRY` substitution variable | 5 files |
 | `image-build/scripts/trigger-cloudbuild.sh` | `--project` / `--registry` flags | 1 file |
 | `image-build/scripts/pull-containers.sh` | `--registry` flag | 1 file |
@@ -70,7 +70,7 @@ default_harness_config: claude
 
 **Resolution logic** (in `ResolveHarnessConfig` / image resolution):
 ```
-embedded default:    us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-claude:latest
+embedded default:    scion-claude:latest
 image_registry set:  ghcr.io/myorg
 resolved image:      ghcr.io/myorg/scion-claude:latest
 ```
@@ -130,7 +130,7 @@ Or add to your ~/.scion/settings.yaml:
 Retain the existing `image-build/cloudbuild*.yaml` files, but make them parameterizable for any GCP project:
 
 **Changes to `image-build/scripts/trigger-cloudbuild.sh`** (moved from `hack/`)**:**
-- Accept `--project` and `--registry` flags instead of hardcoding `ptone-misc`.
+- Accept `--project` and `--registry` flags instead of hardcoding a specific project.
 - Default to `$GCLOUD_PROJECT` or `$(gcloud config get-value project)` if not specified.
 - Default registry to `us-central1-docker.pkg.dev/${PROJECT}/scion` (a conventional repo name).
 

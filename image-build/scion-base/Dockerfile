@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Scion Base Image - Adds sciontool and scion user on top of core-base
-ARG BASE_IMAGE=us-central1-docker.pkg.dev/ptone-misc/public-docker/core-base:latest
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS base
 
 # Builder stage for sciontool compilation

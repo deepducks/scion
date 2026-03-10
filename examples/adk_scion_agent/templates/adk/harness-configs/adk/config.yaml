@@ -13,7 +13,7 @@
 # limitations under the License.
 
 harness: generic
-image: us-central1-docker.pkg.dev/ptone-misc/public-docker/scion-adk-agent:latest
+image: scion-adk-agent:latest
 user: scion
 task_flag: "--input"
 args:
