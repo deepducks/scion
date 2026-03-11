@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/scion/pkg/config"
 	"github.com/GoogleCloudPlatform/scion/pkg/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,7 +62,8 @@ func doMultipartRequest(t *testing.T, srv *Server, method, path string, files ma
 }
 
 // createTestHubNativeGrove creates a hub-native grove (no git remote) via the API
-// and returns the grove and its workspace path. Cleans up the workspace on test completion.
+// and returns the grove and its workspace path. Cleans up the workspace and any
+// external grove-config directory on test completion.
 func createTestHubNativeGrove(t *testing.T, srv *Server, name string) (*store.Grove, string) {
 	t.Helper()
 
@@ -74,7 +76,15 @@ func createTestHubNativeGrove(t *testing.T, srv *Server, name string) (*store.Gr
 	workspacePath, err := hubNativeGrovePath(grove.Slug)
 	require.NoError(t, err)
 
-	t.Cleanup(func() { os.RemoveAll(workspacePath) })
+	t.Cleanup(func() {
+		// Clean up the external grove-config directory created by initInRepoGrove
+		// (e.g. ~/.scion/grove-configs/<slug>__<uuid>/).
+		scionDir := filepath.Join(workspacePath, ".scion")
+		if extAgentsDir, err := config.GetGitGroveExternalAgentsDir(scionDir); err == nil && extAgentsDir != "" {
+			os.RemoveAll(filepath.Dir(extAgentsDir)) // remove the <slug>__<uuid> parent dir
+		}
+		os.RemoveAll(workspacePath)
+	})
 
 	return &grove, workspacePath
 }

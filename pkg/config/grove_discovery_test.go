@@ -414,4 +414,95 @@ func TestDiscoverGroves_GitGroveExternal(t *testing.T) {
 	if gitGrove.AgentCount != 1 {
 		t.Errorf("expected 1 agent, got %d", gitGrove.AgentCount)
 	}
+	if gitGrove.Status != GroveStatusOK {
+		t.Errorf("expected status ok for git grove with agents, got %s", gitGrove.Status)
+	}
+}
+
+func TestDiscoverGroves_GitGroveExternalEmptyAgents(t *testing.T) {
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	os.MkdirAll(filepath.Join(tmpHome, ".scion"), 0755)
+
+	// Create a git grove external directory with an empty agents dir (no .scion subdir)
+	groveDir := filepath.Join(tmpHome, ".scion", "grove-configs", "leftover__deadbeef")
+	os.MkdirAll(filepath.Join(groveDir, "agents"), 0755)
+
+	groves, err := DiscoverGroves()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var gitGrove *GroveInfo
+	for i := range groves {
+		if groves[i].Type == GroveTypeGit {
+			gitGrove = &groves[i]
+			break
+		}
+	}
+	if gitGrove == nil {
+		t.Fatal("expected to find git grove")
+	}
+	if gitGrove.Status != GroveStatusOrphaned {
+		t.Errorf("expected orphaned status for git grove with empty agents dir, got %s", gitGrove.Status)
+	}
+}
+
+func TestDiscoverGroves_GroveConfigNoScionNoAgents(t *testing.T) {
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	os.MkdirAll(filepath.Join(tmpHome, ".scion"), 0755)
+
+	// Create a grove-config directory with no .scion and no agents subdir
+	groveDir := filepath.Join(tmpHome, ".scion", "grove-configs", "empty-leftover__aabb1122")
+	os.MkdirAll(groveDir, 0755)
+
+	groves, err := DiscoverGroves()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var found *GroveInfo
+	for i := range groves {
+		if groves[i].Name == "empty-leftover" {
+			found = &groves[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expected to find orphaned grove-config dir with no .scion and no agents")
+	}
+	if found.Status != GroveStatusOrphaned {
+		t.Errorf("expected orphaned status, got %s", found.Status)
+	}
+}
+
+func TestFindOrphanedGroveConfigs_IncludesEmptyGitGroves(t *testing.T) {
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	os.MkdirAll(filepath.Join(tmpHome, ".scion"), 0755)
+
+	// Create leftover grove-config with empty agents dir (typical test residue)
+	groveDir := filepath.Join(tmpHome, ".scion", "grove-configs", "ws-test__abcd1234")
+	os.MkdirAll(filepath.Join(groveDir, "agents"), 0755)
+
+	orphaned, err := FindOrphanedGroveConfigs()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(orphaned) != 1 {
+		t.Fatalf("expected 1 orphaned, got %d", len(orphaned))
+	}
+	if orphaned[0].Name != "ws-test" {
+		t.Errorf("expected name 'ws-test', got %s", orphaned[0].Name)
+	}
 }

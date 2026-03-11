@@ -113,13 +113,21 @@ func DiscoverGroves() ([]GroveInfo, error) {
 		configPath := filepath.Join(groveConfigsDir, dirName, DotScion)
 		gi := groveInfoFromExternal(configPath, dirName, slug)
 
-		// If no .scion subdirectory, check if this is a git grove external agents dir
+		// If no .scion subdirectory, this is either a git grove external agents dir
+		// or an orphaned/leftover directory.
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			agentsDir := filepath.Join(groveConfigsDir, dirName, "agents")
+			dirPath := filepath.Join(groveConfigsDir, dirName)
+			agentsDir := filepath.Join(dirPath, "agents")
 			if _, err := os.Stat(agentsDir); err == nil {
 				gi = groveInfoFromGitExternal(agentsDir, dirName, slug)
 			} else {
-				continue
+				// No .scion and no agents dir — orphaned leftover
+				gi = GroveInfo{
+					Name:       slug,
+					Type:       GroveTypeGit,
+					ConfigPath: dirPath,
+					Status:     GroveStatusOrphaned,
+				}
 			}
 		}
 
@@ -160,6 +168,8 @@ func groveInfoFromExternal(configPath, dirName, slug string) GroveInfo {
 }
 
 // groveInfoFromGitExternal builds a GroveInfo for a git grove's external agents directory.
+// If the agents directory is empty (no agent subdirs), the grove is marked as orphaned
+// since there is no .scion directory to link back to the source project.
 func groveInfoFromGitExternal(agentsDir, dirName, slug string) GroveInfo {
 	gi := GroveInfo{
 		Name:       slug,
@@ -170,13 +180,14 @@ func groveInfoFromGitExternal(agentsDir, dirName, slug string) GroveInfo {
 
 	gi.AgentCount = countAgents(agentsDir)
 
-	// Try to find the workspace by scanning for a settings.yaml with workspace_path,
-	// or by looking for a grove-id match. For git groves, the external dir only has
-	// agents/, so we try to extract the grove ID from the directory name and verify
-	// the source repo still exists.
-	// Since git groves don't store workspace_path in their external dir,
-	// we can't definitively determine the workspace — mark unknown.
-	gi.WorkspacePath = "(git repo)"
+	if gi.AgentCount == 0 {
+		// No agents and no .scion directory — this is an orphaned leftover
+		// (e.g. from a deleted workspace or test run).
+		gi.Status = GroveStatusOrphaned
+	} else {
+		// Has agents but no .scion — can't determine workspace path.
+		gi.WorkspacePath = "(git repo)"
+	}
 
 	return gi
 }
