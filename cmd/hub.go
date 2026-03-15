@@ -673,6 +673,14 @@ func printGroveContext(client hubclient.Client, grovePath string, isGlobal bool,
 		}
 	}
 
+	// If hub integration is disabled locally (e.g. after unlink), don't query the Hub
+	if !settings.IsHubEnabled() {
+		fmt.Printf("Linked: no (unlinked locally)\n")
+		fmt.Println()
+		fmt.Println("Run 'scion hub link' to re-link this grove with the Hub.")
+		return
+	}
+
 	// Check if grove is linked to the Hub
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -776,6 +784,13 @@ func getGroveContextJSON(client hubclient.Client, grovePath string, isGlobal boo
 		if gitRemote != "" {
 			result["gitRemote"] = gitRemote
 		}
+	}
+
+	// If hub integration is disabled locally (e.g. after unlink), report as not linked
+	if !settings.IsHubEnabled() {
+		result["linked"] = false
+		result["unlinkedLocally"] = true
+		return result
 	}
 
 	// Check if grove is linked to the Hub
