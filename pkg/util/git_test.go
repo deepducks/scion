@@ -94,11 +94,11 @@ func TestGitUtils(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !IsIgnored("ignored.txt") {
+		if !IsIgnored(repoDir, "ignored.txt") {
 			t.Error("expected ignored.txt to be ignored")
 		}
 
-		if IsIgnored("not-ignored.txt") {
+		if IsIgnored(repoDir, "not-ignored.txt") {
 			t.Error("expected not-ignored.txt to NOT be ignored")
 		}
 	})

@@ -239,11 +239,11 @@ func ProvisionAgent(ctx context.Context, agentName string, templateName string, 
 			rel, err := filepath.Rel(root, projectDir)
 			if err == nil && !strings.HasPrefix(rel, "..") {
 				agentsPath := filepath.Join(rel, "agents")
-				if !util.IsIgnored(agentsPath + "/") {
+				if !util.IsIgnored(root, agentsPath+"/") {
 					return "", "", nil, fmt.Errorf("security error: '%s/' must be in .gitignore when using a project-local grove", agentsPath)
 				}
 				// Warn if the entire .scion directory is not gitignored
-				if !util.IsIgnored(rel + "/") {
+				if !util.IsIgnored(root, rel+"/") {
 					fmt.Fprintf(os.Stderr, "Warning: '%s/' is not in .gitignore. Run 'scion init' to fix this.\n", rel)
 				}
 			}

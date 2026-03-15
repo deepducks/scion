@@ -153,8 +153,11 @@ func GetCommonGitDir(dir string) (string, error) {
 }
 
 // IsIgnored returns true if the given path is ignored by git.
-func IsIgnored(path string) bool {
+func IsIgnored(dir, path string) bool {
 	cmd := exec.Command("git", "check-ignore", "-q", path)
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	err := cmd.Run()
 	return err == nil
 }
