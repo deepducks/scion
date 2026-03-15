@@ -2021,6 +2021,15 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_NoGroveSlug_LocalPathGrove(t *t
 		AppliedConfig: &store.AgentAppliedConfig{
 			HarnessConfig: "claude",
 			Workspace:     "/should/be/cleared",
+			// GitClone is set by populateAgentConfig for any grove with a
+			// GitRemote. For linked groves (broker has local path), the
+			// dispatcher should clear this so the broker uses worktree-based
+			// workspace management instead of cloning.
+			GitClone: &api.GitCloneConfig{
+				URL:    "https://github.com/example/local-project.git",
+				Branch: "main",
+				Depth:  1,
+			},
 		},
 	}
 
@@ -2051,6 +2060,12 @@ func TestHTTPAgentDispatcher_DispatchAgentCreate_NoGroveSlug_LocalPathGrove(t *t
 	}
 	if mockClient.lastCreateReq.Config.Workspace != "" {
 		t.Errorf("expected empty Workspace for local-path grove, got '%s'", mockClient.lastCreateReq.Config.Workspace)
+	}
+
+	// GitClone should be cleared for linked groves — the broker already has the
+	// repo locally and should use worktree-based workspace management.
+	if mockClient.lastCreateReq.Config.GitClone != nil {
+		t.Errorf("expected nil GitClone for linked grove with local provider path, got %+v", mockClient.lastCreateReq.Config.GitClone)
 	}
 }
 

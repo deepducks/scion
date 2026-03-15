@@ -239,11 +239,15 @@ func (d *HTTPAgentDispatcher) buildCreateRequest(ctx context.Context, agent *sto
 	// Add configuration if available
 	if agent.AppliedConfig != nil {
 		workspace := agent.AppliedConfig.Workspace
+		gitClone := agent.AppliedConfig.GitClone
 		// When the broker has a local provider path for this grove, the
 		// workspace is derived from the grove path (not a hub-native path).
-		// Clear the hub-native workspace that populateAgentConfig may have set.
+		// Clear the hub-native workspace and git clone config that
+		// populateAgentConfig may have set — the broker already has the
+		// repo locally and will use worktree-based workspace management.
 		if groveInfo.grovePath != "" {
 			workspace = ""
+			gitClone = nil
 		}
 		req.Config = &RemoteAgentConfig{
 			Template:      agent.Template,
@@ -256,7 +260,7 @@ func (d *HTTPAgentDispatcher) buildCreateRequest(ctx context.Context, agent *sto
 			Branch:        agent.AppliedConfig.Branch,
 			TemplateID:    agent.AppliedConfig.TemplateID,
 			TemplateHash:  agent.AppliedConfig.TemplateHash,
-			GitClone:      agent.AppliedConfig.GitClone,
+			GitClone:      gitClone,
 		}
 		req.ResolvedEnv = agent.AppliedConfig.Env
 
