@@ -18,6 +18,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import d2 from 'astro-d2';
+import starlightLinksValidator from 'starlight-links-validator';
 
 // https://astro.build/config
 export default defineConfig({
@@ -26,6 +27,7 @@ export default defineConfig({
 	integrations: [
 		d2(),
 		starlight({
+			plugins: [starlightLinksValidator()],
 			title: 'Scion',
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/google/scion' },
