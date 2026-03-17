@@ -17,9 +17,13 @@ package runtimebroker
 import (
 	"context"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/api"
+	"github.com/GoogleCloudPlatform/scion/pkg/config"
 	"github.com/GoogleCloudPlatform/scion/pkg/runtime"
 )
 
@@ -287,6 +291,139 @@ func TestBuildStartContext_AttachMode(t *testing.T) {
 	}
 	if sc.Opts.Detached == nil || *sc.Opts.Detached {
 		t.Error("expected Detached to be false when Attach=true")
+	}
+}
+
+func TestBuildStartContext_HubNativeGroveWritesGroveID(t *testing.T) {
+	cfg := DefaultServerConfig()
+	cfg.StateDir = t.TempDir()
+	mgr := &envCapturingManager{}
+	rt := &runtime.MockRuntime{}
+	srv := New(cfg, mgr, rt)
+
+	// Simulate a hub-native grove: GroveSlug set, GrovePath pre-resolved
+	// (as the createAgent handler does for env-gather), and GroveID from hub.
+	grovesDir := t.TempDir()
+	grovePath := filepath.Join(grovesDir, "web-demo")
+
+	sc, err := srv.buildStartContext(context.Background(), startContextInputs{
+		Name:      "agent-1",
+		GroveSlug: "web-demo",
+		GrovePath: grovePath,
+		GroveID:   "6d868c0f-b862-49e0-a44b-3555a3887ee3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify .scion dir was created
+	scionDir := filepath.Join(grovePath, ".scion")
+	if _, err := os.Stat(scionDir); os.IsNotExist(err) {
+		t.Fatal(".scion directory was not created")
+	}
+
+	// Verify grove-id was written with hub's ID
+	groveID, err := config.ReadGroveID(scionDir)
+	if err != nil {
+		t.Fatalf("failed to read grove-id: %v", err)
+	}
+	if groveID != "6d868c0f-b862-49e0-a44b-3555a3887ee3" {
+		t.Errorf("expected grove-id '6d868c0f-b862-49e0-a44b-3555a3887ee3', got %q", groveID)
+	}
+
+	// Verify external grove-configs directories were created
+	extAgents, err := config.GetGitGroveExternalAgentsDir(scionDir)
+	if err != nil {
+		t.Fatalf("failed to get external agents dir: %v", err)
+	}
+	if extAgents == "" {
+		t.Fatal("expected non-empty external agents dir")
+	}
+	if _, err := os.Stat(extAgents); os.IsNotExist(err) {
+		t.Fatalf("external agents dir was not created: %s", extAgents)
+	}
+
+	// Verify agent home resolves to external path (not inside workspace)
+	agentHome := config.GetAgentHomePath(scionDir, "test-agent")
+	if !strings.Contains(agentHome, "grove-configs") {
+		t.Errorf("expected agent home under grove-configs, got %q", agentHome)
+	}
+	if strings.Contains(agentHome, "web-demo") && !strings.Contains(agentHome, "grove-configs") {
+		t.Errorf("agent home should NOT be inside workspace dir, got %q", agentHome)
+	}
+
+	// GrovePath should be passed through to opts
+	if sc.Opts.GrovePath != grovePath {
+		t.Errorf("expected GrovePath %q, got %q", grovePath, sc.Opts.GrovePath)
+	}
+}
+
+func TestBuildStartContext_HubNativeGroveSlugResolution(t *testing.T) {
+	cfg := DefaultServerConfig()
+	cfg.StateDir = t.TempDir()
+	mgr := &envCapturingManager{}
+	rt := &runtime.MockRuntime{}
+	srv := New(cfg, mgr, rt)
+
+	// Simulate: GroveSlug set, GrovePath empty (buildStartContext resolves it),
+	// GroveID from hub. This is the path when the handler doesn't pre-resolve.
+	t.Setenv("HOME", t.TempDir())
+
+	sc, err := srv.buildStartContext(context.Background(), startContextInputs{
+		Name:      "agent-1",
+		GroveSlug: "my-project",
+		GroveID:   "aabbccdd-1234-5678-9012-abcdef123456",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify grove-id was written
+	scionDir := filepath.Join(sc.Opts.GrovePath, ".scion")
+	groveID, err := config.ReadGroveID(scionDir)
+	if err != nil {
+		t.Fatalf("failed to read grove-id: %v", err)
+	}
+	if groveID != "aabbccdd-1234-5678-9012-abcdef123456" {
+		t.Errorf("expected grove-id from hub, got %q", groveID)
+	}
+}
+
+func TestBuildStartContext_HubNativeGrovePreservesExistingGroveID(t *testing.T) {
+	cfg := DefaultServerConfig()
+	cfg.StateDir = t.TempDir()
+	mgr := &envCapturingManager{}
+	rt := &runtime.MockRuntime{}
+	srv := New(cfg, mgr, rt)
+
+	// Pre-create .scion dir with an existing grove-id
+	grovePath := filepath.Join(t.TempDir(), "existing-grove")
+	scionDir := filepath.Join(grovePath, ".scion")
+	if err := os.MkdirAll(scionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	existingID := "existing-id-1234-5678"
+	if err := config.WriteGroveID(scionDir, existingID); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := srv.buildStartContext(context.Background(), startContextInputs{
+		Name:      "agent-1",
+		GroveSlug: "existing-grove",
+		GrovePath: grovePath,
+		GroveID:   "new-id-from-hub",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify existing grove-id was NOT overwritten
+	groveID, err := config.ReadGroveID(scionDir)
+	if err != nil {
+		t.Fatalf("failed to read grove-id: %v", err)
+	}
+	if groveID != existingID {
+		t.Errorf("expected existing grove-id %q to be preserved, got %q", existingID, groveID)
 	}
 }
 
