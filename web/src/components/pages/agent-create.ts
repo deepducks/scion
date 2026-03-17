@@ -105,6 +105,9 @@ export class ScionPageAgentCreate extends LitElement {
   /** Whether the groveId was explicitly passed via URL query param (user navigated from grove page) */
   private groveFromUrl = false;
 
+  /** Cached grove settings keyed by groveId */
+  private groveSettingsCache: Map<string, { defaultTemplate?: string }> = new Map();
+
   /** Profiles available on the currently selected broker */
   private get selectedBrokerProfiles(): import('../../shared/types.js').BrokerProfile[] {
     if (!this.brokerId) return [];
@@ -380,18 +383,9 @@ export class ScionPageAgentCreate extends LitElement {
         // Auto-select broker based on grove's default
         this.selectBrokerForGrove();
 
-        // Auto-select default template if available
+        // Auto-select template based on grove settings, then fallback
         if (!this.templateId) {
-          const defaultTemplate = this.templates.find(
-            (t) => t.slug === 'default' || t.name === 'default'
-          );
-          if (defaultTemplate) {
-            this.templateId = defaultTemplate.id;
-            this.harness = defaultTemplate.harness || 'gemini';
-          } else if (this.templates.length > 0) {
-            this.templateId = this.templates[0].id;
-            this.harness = this.templates[0].harness || 'gemini';
-          }
+          await this.selectDefaultTemplate();
         }
 
         // Load GCP service accounts for selected grove
@@ -682,22 +676,37 @@ export class ScionPageAgentCreate extends LitElement {
   }
 
   /**
-   * Re-select template when grove changes: if current template is not visible
-   * in the new grove, reset to the first available or clear.
+   * Select the default template for the current grove using grove settings.
+   * Falls back to a template named "default", then the first available template.
    */
-  private selectTemplateForGrove(): void {
+  private async selectDefaultTemplate(): Promise<void> {
     const visible = this.filteredTemplates;
-    if (this.templateId && !visible.find((t) => t.id === this.templateId)) {
-      const defaultTemplate = visible.find((t) => t.slug === 'default' || t.name === 'default');
-      if (defaultTemplate) {
-        this.templateId = defaultTemplate.id;
-        this.harness = defaultTemplate.harness || 'gemini';
-      } else if (visible.length > 0) {
-        this.templateId = visible[0].id;
-        this.harness = visible[0].harness || 'gemini';
-      } else {
-        this.templateId = '';
+
+    // Try grove settings first
+    if (this.groveId) {
+      const settings = await this.fetchGroveSettings(this.groveId);
+      if (settings?.defaultTemplate) {
+        const match = visible.find(
+          (t) => t.name === settings.defaultTemplate || t.slug === settings.defaultTemplate
+        );
+        if (match) {
+          this.templateId = match.id;
+          this.harness = match.harness || 'gemini';
+          return;
+        }
       }
+    }
+
+    // Fallback: template named "default"
+    const fallback = visible.find((t) => t.slug === 'default' || t.name === 'default');
+    if (fallback) {
+      this.templateId = fallback.id;
+      this.harness = fallback.harness || 'gemini';
+    } else if (visible.length > 0) {
+      this.templateId = visible[0].id;
+      this.harness = visible[0].harness || 'gemini';
+    } else {
+      this.templateId = '';
     }
   }
 
@@ -784,6 +793,31 @@ export class ScionPageAgentCreate extends LitElement {
 
   private get verifiedGCPServiceAccounts(): GCPServiceAccount[] {
     return this.gcpServiceAccounts.filter((sa) => sa.verified);
+  }
+
+  /**
+   * Fetch grove settings and return the defaultTemplate value (if any).
+   * Results are cached per groveId to avoid redundant requests.
+   */
+  private async fetchGroveSettings(
+    groveId: string
+  ): Promise<{ defaultTemplate?: string } | null> {
+    if (!groveId) return null;
+
+    const cached = this.groveSettingsCache.get(groveId);
+    if (cached !== undefined) return cached;
+
+    try {
+      const res = await apiFetch(`/api/v1/groves/${groveId}/settings`);
+      if (res.ok) {
+        const data = (await res.json()) as { defaultTemplate?: string };
+        this.groveSettingsCache.set(groveId, data);
+        return data;
+      }
+    } catch {
+      // Non-critical — fall back to generic default
+    }
+    return null;
   }
 
   private slugify(text: string): string {
@@ -882,7 +916,7 @@ export class ScionPageAgentCreate extends LitElement {
               @sl-change=${(e: Event) => {
                 this.groveId = (e.target as HTMLElement & { value: string }).value;
                 this.selectBrokerForGrove();
-                this.selectTemplateForGrove();
+                void this.selectDefaultTemplate();
                 void this.loadGCPServiceAccounts();
                 // Clear branch if new grove is not git-based
                 if (!this.selectedGrove?.gitRemote) {
