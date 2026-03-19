@@ -55,12 +55,12 @@ gcloud compute ssh "${INSTANCE_NAME}" \
 
         CLONE_URL=\"https://github.com/${REPO}.git\"
 
-        if [ -d \"/home/scion/scion/.git\" ]; then
+        if sudo -u scion git -C /home/scion/scion rev-parse --git-dir >/dev/null 2>&1; then
             echo \"Repository /home/scion/scion already exists, fetching latest...\"
             sudo -u scion sh -c 'cd /home/scion/scion && git fetch origin && git reset --hard origin/HEAD'
         else
-            if [ -d \"/home/scion/scion\" ]; then
-                echo \"Directory /home/scion/scion exists but is not a git repo, removing...\"
+            if [ -e \"/home/scion/scion\" ]; then
+                echo \"Removing existing non-git path /home/scion/scion...\"
                 sudo rm -rf /home/scion/scion
             fi
             echo \"Cloning \${CLONE_URL}...\"

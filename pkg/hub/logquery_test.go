@@ -22,6 +22,7 @@ import (
 	logpb "cloud.google.com/go/logging/apiv2/loggingpb"
 	mrpb "google.golang.org/genproto/googleapis/api/monitoredres"
 	ltype "google.golang.org/genproto/googleapis/logging/type"
+	logpb "google.golang.org/genproto/googleapis/logging/v2"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
