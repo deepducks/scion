@@ -119,6 +119,7 @@ type GitHubAppServerConfig struct {
 	WebhookSecret   string
 	APIBaseURL      string
 	WebhooksEnabled bool
+	InstallationURL string
 }
 
 // DefaultServerConfig returns the default server configuration.

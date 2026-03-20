@@ -47,6 +47,7 @@ type GitHubAppConfigResponse struct {
 	Configured       bool                     `json:"configured"`
 	HasPrivateKey    bool                     `json:"has_private_key"`
 	HasWebhookSecret bool                     `json:"has_webhook_secret"`
+	InstallationURL  string                   `json:"installation_url,omitempty"`
 	RateLimit        *githubapp.RateLimitInfo `json:"rate_limit,omitempty"`
 }
 
@@ -57,6 +58,7 @@ type GitHubAppConfigUpdateRequest struct {
 	WebhookSecret   *string `json:"webhook_secret,omitempty"`
 	APIBaseURL      *string `json:"api_base_url,omitempty"`
 	WebhooksEnabled *bool   `json:"webhooks_enabled,omitempty"`
+	InstallationURL *string `json:"installation_url,omitempty"`
 }
 
 // handleGitHubApp handles GET and PUT /api/v1/github-app.
@@ -103,6 +105,7 @@ func (s *Server) handleGetGitHubApp(w http.ResponseWriter, r *http.Request) {
 		Configured:       cfg.AppID != 0 && hasPrivateKey,
 		HasPrivateKey:    hasPrivateKey,
 		HasWebhookSecret: hasWebhookSecret,
+		InstallationURL:  cfg.InstallationURL,
 		RateLimit:        rateLimit,
 	})
 }
@@ -154,6 +157,9 @@ func (s *Server) handleUpdateGitHubApp(w http.ResponseWriter, r *http.Request) {
 	if req.WebhooksEnabled != nil {
 		s.config.GitHubAppConfig.WebhooksEnabled = *req.WebhooksEnabled
 	}
+	if req.InstallationURL != nil {
+		s.config.GitHubAppConfig.InstallationURL = *req.InstallationURL
+	}
 	cfg := s.config.GitHubAppConfig
 	s.mu.Unlock()
 
@@ -185,6 +191,7 @@ func (s *Server) handleUpdateGitHubApp(w http.ResponseWriter, r *http.Request) {
 		Configured:       cfg.AppID != 0 && hasPrivateKey,
 		HasPrivateKey:    hasPrivateKey,
 		HasWebhookSecret: hasWebhookSecret,
+		InstallationURL:  cfg.InstallationURL,
 	})
 }
 
@@ -273,6 +280,9 @@ func (s *Server) persistGitHubAppConfig(cfg GitHubAppServerConfig) error {
 	// Preserve existing private_key_path if it was set via settings.yaml directly
 	if cfg.PrivateKeyPath != "" {
 		ghApp["private_key_path"] = cfg.PrivateKeyPath
+	}
+	if cfg.InstallationURL != "" {
+		ghApp["installation_url"] = cfg.InstallationURL
 	}
 
 	if len(ghApp) > 0 {

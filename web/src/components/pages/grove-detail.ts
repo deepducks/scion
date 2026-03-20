@@ -776,6 +776,15 @@ export class ScionPageGroveDetail extends LitElement {
     if (!this.grove) return nothing;
     const type = this.grove.groveType || 'hub-native';
     const icon = { 'linked': 'link-45deg', 'hub-native': 'folder-fill' }[type] ?? 'folder-fill';
+    const hasGitHub = this.grove.githubInstallationId != null;
+    if (hasGitHub) {
+      return html`
+        <span style="position: relative; display: inline-flex;">
+          <sl-icon name=${icon}></sl-icon>
+          <sl-icon name="github" style="position: absolute; bottom: -4px; right: -6px; font-size: 0.75rem; background: var(--scion-bg, #fff); border-radius: 50%;"></sl-icon>
+        </span>
+      `;
+    }
     return html`<sl-icon name=${icon}></sl-icon>`;
   }
 

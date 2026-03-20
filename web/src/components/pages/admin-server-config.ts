@@ -221,6 +221,7 @@ interface GitHubAppConfigData {
   configured: boolean;
   has_private_key: boolean;
   has_webhook_secret: boolean;
+  installation_url?: string;
   rate_limit?: RateLimitInfo;
 }
 
@@ -325,6 +326,7 @@ export class ScionPageAdminServerConfig extends LitElement {
   @state() private githubAppHasWebhookSecret = false;
   @state() private githubAppPrivateKey = '';
   @state() private githubAppWebhookSecret = '';
+  @state() private githubAppInstallationUrl = '';
   @state() private githubAppSaving = false;
   @state() private githubAppError: string | null = null;
   @state() private githubAppSuccess: string | null = null;
@@ -1834,6 +1836,17 @@ export class ScionPageAdminServerConfig extends LitElement {
               ${this.githubAppWebhooksEnabled ? 'Enabled' : 'Disabled'}
             </sl-switch>
           </div>
+          <div class="form-field full-width">
+            <label>Public Installation URL</label>
+            <span class="hint">The public link where users can install this GitHub App on their org or account</span>
+            <sl-input
+              value=${this.githubAppInstallationUrl}
+              placeholder="https://github.com/apps/your-app-name/installations/new"
+              @sl-input=${(e: Event) => {
+                this.githubAppInstallationUrl = (e.target as HTMLInputElement).value;
+              }}
+            ></sl-input>
+          </div>
         </div>
 
         ${this.githubAppRateLimit ? html`
@@ -1923,6 +1936,7 @@ export class ScionPageAdminServerConfig extends LitElement {
         this.githubAppWebhooksEnabled = data.webhooks_enabled;
         this.githubAppHasPrivateKey = data.has_private_key;
         this.githubAppHasWebhookSecret = data.has_webhook_secret;
+        this.githubAppInstallationUrl = data.installation_url || '';
         this.githubAppRateLimit = data.rate_limit || null;
         // Clear write-only fields after load
         this.githubAppPrivateKey = '';
@@ -1998,6 +2012,7 @@ export class ScionPageAdminServerConfig extends LitElement {
         app_id: this.githubAppId || undefined,
         api_base_url: this.githubAppApiBaseUrl || undefined,
         webhooks_enabled: this.githubAppWebhooksEnabled,
+        installation_url: this.githubAppInstallationUrl || undefined,
       };
 
       // Only send secrets if the user provided new values

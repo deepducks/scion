@@ -374,17 +374,11 @@ func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {
 	// Auto-match groves
 	matchedGroves := s.matchGrovesToInstallation(ctx, installation)
 
-	// Return a response (the design says redirect to a confirmation page,
-	// but since we may not have a web UI path, return JSON for now)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":          "ok",
-		"installation_id": installationID,
-		"account":         ghInstallation.Account.Login,
-		"account_type":    ghInstallation.Account.Type,
-		"repositories":    repoNames,
-		"matched_groves":  matchedGroves,
-		"setup_action":    setupAction,
-	})
+	// Redirect to the admin config page's GitHub App tab so the user sees
+	// the result in context. Fall back to JSON if no web UI is available.
+	http.Redirect(w, r, "/admin/config#github-app", http.StatusFound)
+
+	_ = matchedGroves // consumed by matchGrovesToInstallation side effects
 }
 
 // handleGitHubAppDiscover handles POST /api/v1/github-app/installations/discover.

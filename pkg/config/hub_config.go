@@ -195,6 +195,7 @@ type GitHubAppConfig struct {
 	WebhookSecret   string `json:"webhookSecret,omitempty" yaml:"webhookSecret,omitempty" koanf:"webhookSecret"`
 	APIBaseURL      string `json:"apiBaseUrl,omitempty" yaml:"apiBaseUrl,omitempty" koanf:"apiBaseUrl"`
 	WebhooksEnabled bool   `json:"webhooksEnabled,omitempty" yaml:"webhooksEnabled,omitempty" koanf:"webhooksEnabled"`
+	InstallationURL string `json:"installationUrl,omitempty" yaml:"installationUrl,omitempty" koanf:"installationUrl"`
 }
 
 // SecretsConfig holds configuration for the secrets backend.

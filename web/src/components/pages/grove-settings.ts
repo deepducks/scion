@@ -183,9 +183,14 @@ export class ScionPageGroveSettings extends LitElement {
   @state()
   private githubAppPermissions: GitHubTokenPermissions | null = null;
 
-
   @state()
   private githubAppError: string | null = null;
+
+  @state()
+  private githubAppConfigured = false;
+
+  @state()
+  private githubAppInstallationUrl = '';
 
   private syncAgentId: string | null = null;
   private syncPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -634,11 +639,34 @@ export class ScionPageGroveSettings extends LitElement {
       this.githubAppInstallationId = this.grove.githubInstallationId ?? null;
       this.githubAppStatus = this.grove.githubAppStatus ?? null;
       this.githubAppPermissions = this.grove.githubPermissions ?? null;
+
+      // Check if the hub has a GitHub App configured
+      if (this.grove.gitRemote) {
+        void this.checkGitHubAppConfigured();
+      }
     } catch (err) {
       console.error('Failed to load grove:', err);
       this.error = err instanceof Error ? err.message : 'Failed to load grove';
     } finally {
       this.loading = false;
+    }
+  }
+
+  private async checkGitHubAppConfigured(): Promise<void> {
+    try {
+      const res = await apiFetch('/api/v1/github-app');
+      if (res.ok) {
+        const data = (await res.json()) as { configured: boolean; installation_url?: string };
+        this.githubAppConfigured = data.configured;
+        this.githubAppInstallationUrl = data.installation_url || '';
+
+        // Auto-discover if configured and grove has no installation yet
+        if (data.configured && this.githubAppInstallationId == null && this.grove?.gitRemote) {
+          void this.discoverGitHubInstallation();
+        }
+      }
+    } catch {
+      // Non-critical — just don't show the section
     }
   }
 
@@ -1036,6 +1064,7 @@ export class ScionPageGroveSettings extends LitElement {
 
   private renderGitHubAppSection() {
     if (!this.grove?.gitRemote) return '';
+    if (!this.githubAppConfigured) return '';
 
     const status = this.githubAppStatus;
     const hasInstallation = this.githubAppInstallationId != null;
@@ -1072,8 +1101,16 @@ export class ScionPageGroveSettings extends LitElement {
         ${!hasInstallation ? html`
           <div class="github-no-install">
             <sl-icon name="github" style="font-size: 2rem; color: var(--scion-text-muted, #64748b);"></sl-icon>
-            <p>No GitHub App installed for this grove's repository.</p>
-            <p class="field-help">Ask your Hub admin to configure the GitHub App, then install it on your organization or account.</p>
+            <p>No GitHub App installation found for this grove's repository.</p>
+            ${this.githubAppInstallationUrl ? html`
+              <p class="field-help">
+                <a href=${this.githubAppInstallationUrl} target="_blank" rel="noopener noreferrer">
+                  Install the GitHub App
+                </a> on your organization or account, then click Discover.
+              </p>
+            ` : html`
+              <p class="field-help">Ask your Hub admin to configure the GitHub App, then install it on your organization or account.</p>
+            `}
             <sl-button variant="default" size="small" @click=${() => this.discoverGitHubInstallation()}>
               <sl-icon slot="prefix" name="search"></sl-icon>
               Discover Installation
@@ -1121,10 +1158,23 @@ export class ScionPageGroveSettings extends LitElement {
             </div>
           </div>
 
-          <div style="margin-top: 1rem;">
+          <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            ${status?.state === 'unchecked' ? html`
+              <sl-button variant="default" size="small" @click=${() => this.checkGitHubStatus()}>
+                <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+                Check Status
+              </sl-button>
+            ` : ''}
+            <a href=${`https://github.com/settings/installations/${this.githubAppInstallationId}`}
+               target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+              <sl-button variant="text" size="small">
+                <sl-icon slot="prefix" name="gear"></sl-icon>
+                Configure Installation
+              </sl-button>
+            </a>
             <sl-button variant="text" size="small" @click=${() => this.removeGitHubInstallation()}>
               <sl-icon slot="prefix" name="x-circle"></sl-icon>
-              Remove Installation
+              Remove
             </sl-button>
           </div>
         `}
@@ -1139,6 +1189,21 @@ export class ScionPageGroveSettings extends LitElement {
         ${label}: ${value}
       </span>
     `;
+  }
+
+  private async checkGitHubStatus(): Promise<void> {
+    this.githubAppError = null;
+    try {
+      // Trigger a discover to refresh installation state from GitHub
+      const res = await apiFetch('/api/v1/github-app/installations/discover', { method: 'POST' });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(data.message || `Check failed (${res.status})`);
+      }
+      await this.loadGrove();
+    } catch (err) {
+      this.githubAppError = err instanceof Error ? err.message : 'Check failed';
+    }
   }
 
   private async discoverGitHubInstallation(): Promise<void> {

@@ -288,6 +288,7 @@ type V1GitHubAppConfig struct {
 	WebhookSecret   string `json:"webhook_secret,omitempty" yaml:"webhook_secret,omitempty" koanf:"webhook_secret"`
 	APIBaseURL      string `json:"api_base_url,omitempty" yaml:"api_base_url,omitempty" koanf:"api_base_url"`
 	WebhooksEnabled bool   `json:"webhooks_enabled,omitempty" yaml:"webhooks_enabled,omitempty" koanf:"webhooks_enabled"`
+	InstallationURL string `json:"installation_url,omitempty" yaml:"installation_url,omitempty" koanf:"installation_url"`
 }
 
 // V1NotificationChannelConfig holds configuration for an external notification channel.
@@ -1068,6 +1069,7 @@ func ConvertV1ServerToGlobalConfig(v1 *V1ServerConfig) *GlobalConfig {
 		gc.GitHubApp.WebhookSecret = v1.GitHubApp.WebhookSecret
 		gc.GitHubApp.APIBaseURL = v1.GitHubApp.APIBaseURL
 		gc.GitHubApp.WebhooksEnabled = v1.GitHubApp.WebhooksEnabled
+		gc.GitHubApp.InstallationURL = v1.GitHubApp.InstallationURL
 	}
 
 	return &gc
@@ -1184,6 +1186,7 @@ func ConvertGlobalToV1ServerConfig(gc *GlobalConfig) *V1ServerConfig {
 			WebhookSecret:   gc.GitHubApp.WebhookSecret,
 			APIBaseURL:      gc.GitHubApp.APIBaseURL,
 			WebhooksEnabled: gc.GitHubApp.WebhooksEnabled,
+			InstallationURL: gc.GitHubApp.InstallationURL,
 		}
 	}
 

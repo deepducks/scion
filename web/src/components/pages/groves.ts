@@ -351,7 +351,7 @@ export class ScionPageGroves extends LitElement {
               ${this.renderGroveIcon(grove, true)}
               ${grove.name}
             </h3>
-            <div class="grove-path">${grove.gitRemote || grove.path || this.groveTypeConfig(grove).label}</div>
+            <div class="grove-path">${grove.gitRemote || grove.path || this.groveTypeConfig(grove).label}${grove.githubInstallationId != null ? html` <sl-icon name="github" style="font-size: 0.875rem; vertical-align: middle; opacity: 0.7;"></sl-icon>` : ''}</div>
           </div>
         </div>
         <div class="grove-stats">
@@ -402,7 +402,7 @@ export class ScionPageGroves extends LitElement {
             ${grove.name}
           </span>
         </td>
-        <td class="mono-cell">${grove.gitRemote || grove.path || this.groveTypeConfig(grove).label}</td>
+        <td class="mono-cell">${grove.gitRemote || grove.path || this.groveTypeConfig(grove).label}${grove.githubInstallationId != null ? html` <sl-icon name="github" style="font-size: 0.875rem; vertical-align: middle; opacity: 0.7;"></sl-icon>` : ''}</td>
         <td>${grove.agentCount}</td>
         <td class="hide-mobile">
           <span class="meta-text">${grove.ownerName || '—'}</span>
