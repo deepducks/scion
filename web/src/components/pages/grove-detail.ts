@@ -606,6 +606,20 @@ export class ScionPageGroveDetail extends LitElement {
       margin-bottom: 1rem;
     }
 
+    .files-tab-header {
+      position: relative;
+    }
+
+    .files-tab-actions {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      height: 2.5rem;
+    }
+
     .files-tab-group {
       margin-bottom: 0;
     }
@@ -1265,8 +1279,8 @@ export class ScionPageGroveDetail extends LitElement {
     return '\u2026' + label.slice(label.length - 18);
   }
 
-  private onFileTabChange(e: CustomEvent): void {
-    const panel = (e.target as HTMLElement).querySelector('sl-tab[active]')?.getAttribute('panel');
+  private onFileTabChange(e: CustomEvent<{ name: string }>): void {
+    const panel = e.detail.name;
     if (!panel) return;
     this.activeFileTab = panel;
     // Load files if not already loaded
@@ -1274,6 +1288,45 @@ export class ScionPageGroveDetail extends LitElement {
     if (tabData.files.length === 0 && !tabData.loading && !tabData.error) {
       void this.loadTabFiles(panel);
     }
+  }
+
+  private renderFileActions() {
+    const tabData = this.getTabData(this.activeFileTab);
+    return html`
+      ${this.activeFileTab === 'workspace' && tabData.files.length > 0
+        ? html`
+            <sl-button
+              size="small"
+              variant="default"
+              @click=${() => this.handleDownloadArchive()}
+            >
+              <sl-icon slot="prefix" name="file-earmark-zip"></sl-icon>
+              Download Zip
+            </sl-button>
+          `
+        : nothing}
+      ${can(this.grove?._capabilities, 'update')
+        ? html`
+            <input
+              type="file"
+              id="file-tab-input"
+              multiple
+              style="display: none"
+              @change=${this.handleFileUpload}
+            />
+            <sl-button
+              size="small"
+              variant="default"
+              ?loading=${this.uploadProgress}
+              ?disabled=${this.uploadProgress}
+              @click=${() => this.handleUploadClick()}
+            >
+              <sl-icon slot="prefix" name="upload"></sl-icon>
+              Upload Files
+            </sl-button>
+          `
+        : nothing}
+    `;
   }
 
   private renderFilesSection() {
@@ -1293,63 +1346,36 @@ export class ScionPageGroveDetail extends LitElement {
                 : ''}
             </span>
           </div>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            ${this.activeFileTab === 'workspace' && tabData.files.length > 0
-              ? html`
-                  <sl-button
-                    size="small"
-                    variant="default"
-                    @click=${() => this.handleDownloadArchive()}
-                  >
-                    <sl-icon slot="prefix" name="file-earmark-zip"></sl-icon>
-                    Download Zip
-                  </sl-button>
-                `
-              : nothing}
-            ${can(this.grove?._capabilities, 'update')
-              ? html`
-                  <input
-                    type="file"
-                    id="file-tab-input"
-                    multiple
-                    style="display: none"
-                    @change=${this.handleFileUpload}
-                  />
-                  <sl-button
-                    size="small"
-                    variant="default"
-                    ?loading=${this.uploadProgress}
-                    ?disabled=${this.uploadProgress}
-                    @click=${() => this.handleUploadClick()}
-                  >
-                    <sl-icon slot="prefix" name="upload"></sl-icon>
-                    Upload Files
-                  </sl-button>
-                `
-              : nothing}
-          </div>
+          ${!showTabs
+            ? html`<div style="display: flex; gap: 0.5rem; align-items: center;">
+                ${this.renderFileActions()}
+              </div>`
+            : nothing}
         </div>
 
         ${showTabs
           ? html`
-              <sl-tab-group class="files-tab-group" @sl-tab-show=${this.onFileTabChange}>
-                ${tabs.map(
-                  (tab) => html`
-                    <sl-tab slot="nav" panel=${tab.key} ?active=${tab.key === this.activeFileTab}>
-                      <span class="tab-label-truncated" title=${tab.label}>${this.truncateTabLabel(tab.label)}</span>
-                    </sl-tab>
-                  `
-                )}
-                ${tabs.map(
-                  (tab) => html`
-                    <sl-tab-panel name=${tab.key}
-                      >${tab.key === this.activeFileTab
-                        ? this.renderFileTabContent(this.getTabData(tab.key))
-                        : nothing}</sl-tab-panel
-                    >
-                  `
-                )}
-              </sl-tab-group>
+              <div class="files-tab-header">
+                <sl-tab-group class="files-tab-group" @sl-tab-show=${this.onFileTabChange}>
+                  ${tabs.map(
+                    (tab) => html`
+                      <sl-tab slot="nav" panel=${tab.key} ?active=${tab.key === this.activeFileTab}>
+                        <span class="tab-label-truncated" title=${tab.label}>${this.truncateTabLabel(tab.label)}</span>
+                      </sl-tab>
+                    `
+                  )}
+                  ${tabs.map(
+                    (tab) => html`
+                      <sl-tab-panel name=${tab.key}
+                        >${this.renderFileTabContent(this.getTabData(tab.key))}</sl-tab-panel
+                      >
+                    `
+                  )}
+                </sl-tab-group>
+                <div class="files-tab-actions">
+                  ${this.renderFileActions()}
+                </div>
+              </div>
             `
           : this.renderFileTabContent(tabData)}
       </div>

@@ -759,12 +759,16 @@ func TestSharedDirFiles_UndeclaredDirRejected(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
-func TestSharedDirFiles_GitGroveRejected(t *testing.T) {
+func TestSharedDirFiles_GitGroveNoLocalBroker(t *testing.T) {
 	srv, _ := testServer(t)
 	grove := createTestGitGrove(t, srv, "SD Git Grove", "github.com/test/sd-files")
 
+	addSharedDirToGrove(t, srv, grove.ID, "cache")
+
+	// Without a co-located broker, shared dir browsing should return 409
 	rec := doRequest(t, srv, http.MethodGet, fmt.Sprintf("/api/v1/groves/%s/shared-dirs/cache/files", grove.ID), nil)
 	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "co-located runtime broker")
 }
 
 // Ensure the store's ErrNotFound is wired correctly for grove lookups.
