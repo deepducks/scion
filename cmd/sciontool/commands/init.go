@@ -227,16 +227,23 @@ func runInit(args []string) int {
 	if err := gitCloneWorkspace(targetUID, targetGID); err != nil {
 		log.Error("Git clone failed: %v", err)
 
-		// Update local agent-info.json to error state so local status readers see the failure
+		// Update local agent-info.json to error state so local status readers
+		// and the broker heartbeat see the failure and error message.
+		errMsg := fmt.Sprintf("git clone failed: %v", err)
 		statusHandler.UpdatePhase(state.PhaseError, "", "")
+		statusHandler.SetMessage(errMsg)
 
-		// Report error to Hub so the agent doesn't stay stuck in "cloning" state
+		// Report error to Hub directly so the agent doesn't stay stuck in "cloning" state.
+		// This is best-effort; the broker heartbeat will also pick up the error from
+		// agent-info.json as a fallback if this call fails (e.g. network unreachable).
 		if hubClient := hub.NewClient(); hubClient != nil && hubClient.IsConfigured() {
 			hubCtx, hubCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if hubErr := hubClient.ReportState(hubCtx, state.PhaseError, "", fmt.Sprintf("git clone failed: %v", err)); hubErr != nil {
+			if hubErr := hubClient.ReportState(hubCtx, state.PhaseError, "", errMsg); hubErr != nil {
 				log.Error("Failed to report clone error to Hub: %v", hubErr)
 			}
 			hubCancel()
+		} else {
+			log.Info("Hub client not configured, clone error will be relayed via broker heartbeat")
 		}
 		return 1
 	}

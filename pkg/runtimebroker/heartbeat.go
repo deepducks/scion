@@ -243,6 +243,9 @@ func (s *HeartbeatService) gatherGroveAgents() []hubclient.GroveHeartbeat {
 			HarnessAuth:     ag.HarnessAuth,
 			Profile:         ag.Profile,
 		}
+		if ag.Detail != nil && ag.Detail.Message != "" {
+			agentHB.Message = ag.Detail.Message
+		}
 		groveMap[groveID] = append(groveMap[groveID], agentHB)
 	}
 

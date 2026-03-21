@@ -740,3 +740,33 @@ func readAgentInfoMap(t *testing.T, path string) map[string]interface{} {
 	require.NoError(t, err)
 	return info
 }
+
+func TestStatusHandler_SetMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	statusPath := filepath.Join(tmpDir, "agent-info.json")
+
+	h := &StatusHandler{StatusPath: statusPath}
+
+	// Set phase to error first
+	err := h.UpdatePhase(state.PhaseError, "", "")
+	require.NoError(t, err)
+
+	// Set message
+	err = h.SetMessage("git clone failed: authentication required")
+	require.NoError(t, err)
+
+	// Verify message is in detail
+	info := readAgentInfoMap(t, statusPath)
+	detail, ok := info["detail"].(map[string]interface{})
+	require.True(t, ok, "expected detail map in agent-info.json")
+	assert.Equal(t, "git clone failed: authentication required", detail["message"])
+	assert.Equal(t, "error", info["phase"])
+
+	// Clear message
+	err = h.SetMessage("")
+	require.NoError(t, err)
+
+	info = readAgentInfoMap(t, statusPath)
+	_, hasDetail := info["detail"]
+	assert.False(t, hasDetail, "detail should be removed when message is cleared")
+}

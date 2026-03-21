@@ -90,6 +90,9 @@ func (m *AgentManager) List(ctx context.Context, filter map[string]string) ([]ap
 					if agents[i].HarnessConfig == "" {
 						agents[i].HarnessConfig = info.HarnessConfig
 					}
+					if info.Detail != nil {
+						agents[i].Detail = info.Detail
+					}
 				}
 			}
 

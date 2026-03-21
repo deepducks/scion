@@ -101,6 +101,7 @@ type AgentHeartbeat struct {
 	Phase           string `json:"phase,omitempty"`
 	Activity        string `json:"activity,omitempty"`
 	ContainerStatus string `json:"containerStatus,omitempty"`
+	Message         string `json:"message,omitempty"`     // Error or status message from agent-info.json
 	HarnessAuth     string `json:"harnessAuth,omitempty"` // Resolved auth method from container labels
 	Profile         string `json:"profile,omitempty"`     // Settings profile used
 }

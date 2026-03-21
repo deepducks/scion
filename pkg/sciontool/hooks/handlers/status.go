@@ -149,6 +149,33 @@ func (h *StatusHandler) UpdatePhase(phase state.Phase, activity state.Activity, 
 	return h.writeAgentInfoLocked(info)
 }
 
+// SetMessage writes a message to the agent-info.json detail section.
+// This is used to persist error messages so the broker heartbeat can
+// relay them to the hub even after the container exits.
+func (h *StatusHandler) SetMessage(message string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	info := h.readAgentInfoMap()
+
+	detail, _ := info["detail"].(map[string]interface{})
+	if detail == nil {
+		detail = make(map[string]interface{})
+	}
+	if message != "" {
+		detail["message"] = message
+	} else {
+		delete(detail, "message")
+	}
+	if len(detail) > 0 {
+		info["detail"] = detail
+	} else {
+		delete(info, "detail")
+	}
+
+	return h.writeAgentInfoLocked(info)
+}
+
 // updateActivityIfNotSticky updates the activity only if the current activity is not
 // sticky. If clearWaiting is true, waiting_for_input is also cleared (treated
 // as non-sticky for tool-start events where the user has responded).

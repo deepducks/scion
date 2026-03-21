@@ -4601,6 +4601,7 @@ type brokerAgentHeartbeat struct {
 	Phase           string `json:"phase,omitempty"`
 	Activity        string `json:"activity,omitempty"`
 	ContainerStatus string `json:"containerStatus,omitempty"`
+	Message         string `json:"message,omitempty"`     // Error or status message from agent
 	HarnessAuth     string `json:"harnessAuth,omitempty"` // Resolved auth method from container labels
 	Profile         string `json:"profile,omitempty"`     // Settings profile used
 }
@@ -4647,6 +4648,7 @@ func (s *Server) handleBrokerHeartbeat(w http.ResponseWriter, r *http.Request, i
 			statusUpdate := store.AgentStatusUpdate{
 				ContainerStatus: agentHB.ContainerStatus,
 				Heartbeat:       true, // Ensures LastSeen is updated
+				Message:         agentHB.Message,
 			}
 
 			if agentHB.Phase != "" {
@@ -7717,8 +7719,16 @@ func (s *Server) handleGroveSyncTemplates(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Dispatch to runtime broker
+	// Dispatch to runtime broker.
+	// Set the phase to provisioning BEFORE dispatching so that a fast
+	// container failure (e.g. git clone error) that reports phase=error
+	// via the status API doesn't get clobbered by a post-dispatch update.
 	if dispatcher := s.GetDispatcher(); dispatcher != nil {
+		agent.Phase = string(state.PhaseProvisioning)
+		if err := s.store.UpdateAgent(ctx, agent); err != nil {
+			s.agentLifecycleLog.Warn("Failed to update template-sync agent phase", "error", err)
+		}
+
 		if err := dispatcher.DispatchAgentCreate(ctx, agent); err != nil {
 			// Clean up on dispatch failure
 			s.agentLifecycleLog.Warn("Failed to dispatch template-sync agent", "agent_id", agent.ID, "error", err)
@@ -7726,10 +7736,6 @@ func (s *Server) handleGroveSyncTemplates(w http.ResponseWriter, r *http.Request
 			_ = s.store.DeleteAgent(ctx, agent.ID)
 			RuntimeError(w, "Failed to dispatch template sync agent: "+err.Error())
 			return
-		}
-		agent.Phase = string(state.PhaseProvisioning)
-		if err := s.store.UpdateAgent(ctx, agent); err != nil {
-			s.agentLifecycleLog.Warn("Failed to update template-sync agent phase", "agent_id", agent.ID, "error", err)
 		}
 	}
 
