@@ -1606,6 +1606,8 @@ func (s *Server) handleAgentAction(w http.ResponseWriter, r *http.Request, id, a
 		s.handleAgentGitHubTokenRefresh(w, r, id)
 	case "outbound-message":
 		s.handleAgentOutboundMessage(w, r, id)
+	case "messages":
+		s.handleAgentMessages(w, r, id)
 	default:
 		NotFound(w, "Action")
 	}

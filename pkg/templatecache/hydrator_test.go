@@ -113,6 +113,7 @@ func (m *mockHubClient) Schedules(groveID string) hubclient.ScheduleService     
 func (m *mockHubClient) GCPServiceAccounts(groveID string) hubclient.GCPServiceAccountService {
 	return nil
 }
+func (m *mockHubClient) Messages() hubclient.MessageService { return nil }
 func (m *mockHubClient) Health(ctx context.Context) (*hubclient.HealthResponse, error) {
 	return nil, nil
 }

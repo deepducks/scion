@@ -1705,6 +1705,10 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/api/v1/notifications", s.handleNotifications)
 	s.mux.HandleFunc("/api/v1/notifications/", s.handleNotificationRoutes)
 
+	// Message inbox endpoints (user-facing)
+	s.mux.HandleFunc("/api/v1/messages", s.handleMessages)
+	s.mux.HandleFunc("/api/v1/messages/", s.handleMessageRoutes)
+
 	// WebSocket control channel endpoint for Runtime Brokers
 	s.mux.HandleFunc("/api/v1/runtime-brokers/connect", s.handleRuntimeBrokerConnect)
 

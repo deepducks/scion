@@ -82,6 +82,9 @@ type Client interface {
 	// GCPServiceAccounts returns the GCP service account operations interface scoped to a grove.
 	GCPServiceAccounts(groveID string) GCPServiceAccountService
 
+	// Messages returns the user message inbox operations interface.
+	Messages() MessageService
+
 	// Health checks API availability.
 	Health(ctx context.Context) (*HealthResponse, error)
 }
@@ -104,6 +107,7 @@ type client struct {
 	notifications         *notificationService
 	subscriptions         *subscriptionService
 	subscriptionTemplates *subscriptionTemplateService
+	messages              *messageService
 }
 
 // New creates a new Hub API client.
@@ -131,6 +135,7 @@ func New(baseURL string, opts ...Option) (Client, error) {
 	c.notifications = &notificationService{c: c}
 	c.subscriptions = &subscriptionService{c: c}
 	c.subscriptionTemplates = &subscriptionTemplateService{c: c}
+	c.messages = &messageService{c: c}
 
 	return c, nil
 }
@@ -223,6 +228,11 @@ func (c *client) Schedules(groveID string) ScheduleService {
 // GCPServiceAccounts returns the GCP service account operations interface scoped to a grove.
 func (c *client) GCPServiceAccounts(groveID string) GCPServiceAccountService {
 	return &gcpServiceAccountService{c: c, groveID: groveID}
+}
+
+// Messages returns the user message inbox operations interface.
+func (c *client) Messages() MessageService {
+	return c.messages
 }
 
 // Health checks API availability.

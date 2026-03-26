@@ -501,12 +501,12 @@ The existing `agent-message-viewer` reads from Cloud Logging. With the new messa
 4. ~~Add recipient resolution logic (implicit → agent creator / subscribers)~~
 5. ~~Integrate outbound messages with `ChannelRegistry` (Slack, webhook, email)~~
 
-### Phase 3: Human Inbox CLI and API
+### Phase 3: Human Inbox CLI and API ✅ COMPLETE
 
-1. Add `GET /api/v1/messages` and related endpoints to Hub server
-2. Add `MessageService` to `pkg/hubclient/messages.go`
-3. Add `scion messages` command group to `cmd/messages.go`
-4. Add `scion messages read` subcommand
+1. ~~Add `GET /api/v1/messages` and related endpoints to Hub server~~
+2. ~~Add `MessageService` to `pkg/hubclient/messages.go`~~
+3. ~~Add `scion messages` command group to `cmd/messages.go`~~
+4. ~~Add `scion messages read` subcommand~~
 
 ### Phase 4: Broker Integration
 
