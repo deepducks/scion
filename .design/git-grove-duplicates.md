@@ -389,16 +389,16 @@ If this change needs to be reverted, groves that were created as duplicates (sha
 7. ✅ **Name generation:** `DisplayNameWithSerial()` helper uses parenthesized qualifier (e.g., `acme-widgets (2)`) when serial suffix is applied.
 8. ✅ **Tests:** Store-level tests for multi-grove-per-remote scenarios, slug uniqueness enforcement, serial numbering, and installation-by-repo lookup.
 
-### Phase 2: Grove ID Generation
+### Phase 2: Grove ID Generation ✅ COMPLETED
 
 **Goal:** Stop generating deterministic IDs from git remotes.
 
-1. **Simplify `GenerateGroveID()` and `GenerateGroveIDForDir()`:** Always return `uuid.New().String()`.
-2. **Update `createGrove()` handler:** Remove deterministic ID derivation from git remote. Use client-provided ID or random UUID.
-3. **Update `handleGroveRegister()` handler:** Same — no deterministic ID fallback.
-4. **Update `scion hub grove create` CLI command:** Remove `HashGroveID()` call for ID generation.
-5. **Retain `HashGroveID()` function:** Mark as not used for grove IDs but keep for other potential uses.
-6. **Tests:** Verify that creating two groves for the same URL produces different IDs.
+1. ✅ **Simplify `GenerateGroveID()` and `GenerateGroveIDForDir()`:** Always return `uuid.New().String()`.
+2. ✅ **Update `createGrove()` handler:** Remove deterministic ID derivation from git remote. Use client-provided ID or random UUID. Uses `NextAvailableSlug()` and `DisplayNameWithSerial()` for serial slug/name assignment.
+3. ✅ **Update `handleGroveRegister()` handler:** Same — no deterministic ID fallback. Uses `NextAvailableSlug()` and `DisplayNameWithSerial()` for serial slug/name assignment.
+4. ✅ **Update `scion hub grove create` CLI command:** Remove `HashGroveID()` call for ID generation. Server assigns ID.
+5. ✅ **Retain `HashGroveID()` function:** Marked as not used for grove IDs but kept for other potential uses.
+6. ✅ **Tests:** Verify that creating two groves for the same URL produces different IDs and serial slugs.
 
 ### Phase 3: Registration and Linking Flow
 

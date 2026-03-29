@@ -1321,15 +1321,7 @@ func runHubGroveCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid git URL: %s\n\nAccepted formats:\n  https://github.com/org/repo.git\n  git@github.com:org/repo.git\n  ssh://git@github.com/org/repo", gitURL)
 	}
 
-	// Normalize and build identity string
 	normalized := util.NormalizeGitRemote(gitURL)
-	identity := normalized
-	if hubGroveCreateBranch != "" {
-		identity = normalized + "@" + hubGroveCreateBranch
-	}
-
-	// Deterministic ID
-	groveID := util.HashGroveID(identity)
 
 	// Derive slug
 	org, repo := util.ExtractOrgRepo(gitURL)
@@ -1377,9 +1369,8 @@ func runHubGroveCreate(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Create grove (idempotent — returns existing if ID matches)
+	// Create grove on the hub (server assigns ID)
 	grove, err := client.Groves().Create(ctx, &hubclient.CreateGroveRequest{
-		ID:         groveID,
 		Name:       displayName,
 		Slug:       slug,
 		GitRemote:  normalized,

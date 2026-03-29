@@ -2602,16 +2602,9 @@ func (s *Server) createGrove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Derive deterministic ID from git remote when no explicit ID is provided.
-	// This ensures the same repository always gets the same grove ID regardless
-	// of whether it was created via CLI, web UI, or API, and regardless of
-	// whether the SSH or HTTPS URL variant was used.
 	normalizedRemote := util.NormalizeGitRemote(req.GitRemote)
-	if req.ID == "" && normalizedRemote != "" {
-		req.ID = util.HashGroveID(normalizedRemote)
-	}
 
-	// Idempotency: if we have an ID (client-provided or derived), check for existing grove
+	// Idempotency: if we have a client-provided ID, check for existing grove
 	if req.ID != "" {
 		existing, err := s.store.GetGrove(ctx, req.ID)
 		if err == nil {
@@ -2639,9 +2632,20 @@ func (s *Server) createGrove(w http.ResponseWriter, r *http.Request) {
 		groveID = api.NewUUID()
 	}
 
-	slug := req.Slug
-	if slug == "" {
-		slug = api.Slugify(req.Name)
+	baseSlug := req.Slug
+	if baseSlug == "" {
+		baseSlug = api.Slugify(req.Name)
+	}
+
+	slug, err := s.store.NextAvailableSlug(ctx, baseSlug)
+	if err != nil {
+		writeErrorFromErr(w, err, "")
+		return
+	}
+
+	displayName := req.Name
+	if slug != baseSlug {
+		displayName = api.DisplayNameWithSerial(req.Name, slug, baseSlug)
 	}
 
 	// Apply workspace mode label for git groves with shared workspace mode.
@@ -2654,7 +2658,7 @@ func (s *Server) createGrove(w http.ResponseWriter, r *http.Request) {
 
 	grove := &store.Grove{
 		ID:         groveID,
-		Name:       req.Name,
+		Name:       displayName,
 		Slug:       slug,
 		GitRemote:  normalizedRemote,
 		Labels:     req.Labels,
@@ -3212,20 +3216,28 @@ func (s *Server) handleGroveRegister(w http.ResponseWriter, r *http.Request) {
 
 	// Create new grove if not found
 	if grove == nil {
-		// Use client-provided ID if available; derive deterministic ID from
-		// git remote when possible; fall back to random UUID.
+		// Use client-provided ID if available; fall back to random UUID.
 		groveID := req.ID
-		if groveID == "" && normalizedRemote != "" {
-			groveID = util.HashGroveID(normalizedRemote)
-		}
 		if groveID == "" {
 			groveID = api.NewUUID()
 		}
 
+		baseSlug := api.Slugify(req.Name)
+		slug, err := s.store.NextAvailableSlug(ctx, baseSlug)
+		if err != nil {
+			writeErrorFromErr(w, err, "")
+			return
+		}
+
+		displayName := req.Name
+		if slug != baseSlug {
+			displayName = api.DisplayNameWithSerial(req.Name, slug, baseSlug)
+		}
+
 		grove = &store.Grove{
 			ID:         groveID,
-			Name:       req.Name,
-			Slug:       api.Slugify(req.Name),
+			Name:       displayName,
+			Slug:       slug,
 			GitRemote:  normalizedRemote,
 			Labels:     req.Labels,
 			Visibility: store.VisibilityPrivate,
