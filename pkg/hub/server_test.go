@@ -105,6 +105,23 @@ func TestServer_PersistentSigningKeys_WithHubID(t *testing.T) {
 	if string(userKey1) != string(srv2.userTokenService.config.SigningKey) {
 		t.Error("user signing keys should match with same hubID")
 	}
+
+	// Signing keys should be visible when listing hub-scoped secrets
+	ctx := context.Background()
+	listed, err := s.ListSecrets(ctx, store.SecretFilter{Scope: store.ScopeHub, ScopeID: "test-hub-123"})
+	if err != nil {
+		t.Fatalf("ListSecrets failed: %v", err)
+	}
+	foundKeys := map[string]bool{}
+	for _, sec := range listed {
+		foundKeys[sec.Key] = true
+	}
+	if !foundKeys[SecretKeyAgentSigningKey] {
+		t.Error("agent_signing_key should appear in hub secret list")
+	}
+	if !foundKeys[SecretKeyUserSigningKey] {
+		t.Error("user_signing_key should appear in hub secret list")
+	}
 }
 
 func TestServer_SigningKeyMigration_LegacyHubScopeID(t *testing.T) {
@@ -119,41 +136,70 @@ func TestServer_SigningKeyMigration_LegacyHubScopeID(t *testing.T) {
 		t.Fatalf("failed to migrate test store: %v", err)
 	}
 
-	// First: create a server with no hubID (legacy behavior stores with empty ScopeID,
-	// but we manually store with "hub" to simulate the pre-refactor state)
-	cfg := DefaultServerConfig()
-	legacySrv := New(cfg, s)
-	t.Cleanup(func() { legacySrv.Shutdown(context.Background()) })
-
-	legacyAgentKey := legacySrv.agentTokenService.config.SigningKey
-	legacyUserKey := legacySrv.userTokenService.config.SigningKey
-
-	// Manually re-save the keys with ScopeID="hub" (simulating pre-refactor storage)
 	ctx := context.Background()
+
+	// Directly insert legacy keys with ScopeID="hub" (simulating pre-refactor storage)
+	legacyAgentKey := make([]byte, 32)
+	legacyUserKey := make([]byte, 32)
+	copy(legacyAgentKey, []byte("test-agent-key-1234567890123456"))
+	copy(legacyUserKey, []byte("test-user-key-12345678901234567"))
 	agentEncoded := base64.StdEncoding.EncodeToString(legacyAgentKey)
 	userEncoded := base64.StdEncoding.EncodeToString(legacyUserKey)
 
-	// Store under old "hub" scope
-	_, _ = s.UpsertSecret(ctx, &store.Secret{
+	if err := s.CreateSecret(ctx, &store.Secret{
 		ID: "hub-agent_signing_key", Key: SecretKeyAgentSigningKey,
 		EncryptedValue: agentEncoded, Scope: store.ScopeHub, ScopeID: "hub",
-	})
-	_, _ = s.UpsertSecret(ctx, &store.Secret{
+		Description: "Hub signing key for agent_signing_key",
+	}); err != nil {
+		t.Fatalf("failed to create legacy agent key: %v", err)
+	}
+	if err := s.CreateSecret(ctx, &store.Secret{
 		ID: "hub-user_signing_key", Key: SecretKeyUserSigningKey,
 		EncryptedValue: userEncoded, Scope: store.ScopeHub, ScopeID: "hub",
-	})
+		Description: "Hub signing key for user_signing_key",
+	}); err != nil {
+		t.Fatalf("failed to create legacy user key: %v", err)
+	}
 
 	// Now create a server with an actual hubID — it should migrate from "hub"
-	cfg2 := DefaultServerConfig()
-	cfg2.HubID = "my-new-hub-id"
-	srv2 := New(cfg2, s)
-	t.Cleanup(func() { srv2.Shutdown(context.Background()) })
+	cfg := DefaultServerConfig()
+	cfg.HubID = "my-new-hub-id"
+	srv := New(cfg, s)
+	t.Cleanup(func() { srv.Shutdown(context.Background()) })
 
-	if string(legacyAgentKey) != string(srv2.agentTokenService.config.SigningKey) {
+	if string(legacyAgentKey) != string(srv.agentTokenService.config.SigningKey) {
 		t.Error("agent signing key should be migrated from legacy 'hub' scope")
 	}
-	if string(legacyUserKey) != string(srv2.userTokenService.config.SigningKey) {
+	if string(legacyUserKey) != string(srv.userTokenService.config.SigningKey) {
 		t.Error("user signing key should be migrated from legacy 'hub' scope")
+	}
+
+	// Verify the migrated keys are findable via ListSecrets with the new hub ID.
+	// This is what the admin UI and CLI use to display hub-scoped secrets.
+	listed, err := s.ListSecrets(ctx, store.SecretFilter{Scope: store.ScopeHub, ScopeID: "my-new-hub-id"})
+	if err != nil {
+		t.Fatalf("ListSecrets failed: %v", err)
+	}
+	foundKeys := map[string]bool{}
+	for _, sec := range listed {
+		foundKeys[sec.Key] = true
+	}
+	if !foundKeys[SecretKeyAgentSigningKey] {
+		t.Error("agent_signing_key should be listed under new hub ID after migration")
+	}
+	if !foundKeys[SecretKeyUserSigningKey] {
+		t.Error("user_signing_key should be listed under new hub ID after migration")
+	}
+
+	// Verify the old legacy records are cleaned up
+	oldSecrets, err := s.ListSecrets(ctx, store.SecretFilter{Scope: store.ScopeHub, ScopeID: "hub"})
+	if err != nil {
+		t.Fatalf("ListSecrets (legacy) failed: %v", err)
+	}
+	for _, sec := range oldSecrets {
+		if sec.Key == SecretKeyAgentSigningKey || sec.Key == SecretKeyUserSigningKey {
+			t.Errorf("legacy record for %s should have been deleted during migration", sec.Key)
+		}
 	}
 }
 

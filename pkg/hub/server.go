@@ -692,27 +692,31 @@ func (s *Server) ensureSigningKey(ctx context.Context, keyName string, existingK
 		return nil, fmt.Errorf("failed to load signing key %s from store: %w", keyName, err)
 	}
 
-	// Migration fallback: try the legacy "hub" scope ID used before hub-instance-ID namespacing.
-	// This allows servers upgrading from the old scheme to find their existing signing keys.
-	if hubID != "hub" {
-		val, err = s.store.GetSecretValue(ctx, keyName, store.ScopeHub, "hub")
-		if err == nil {
-			slog.Info("Loaded signing key from legacy 'hub' scope ID, will re-save with new hub ID", "key", keyName)
+	// Migration fallback: try legacy scope IDs used before hub-instance-ID namespacing.
+	// Keys may exist under ScopeID="hub" (pre-refactor) or ScopeID="" (window between
+	// the refactor and the fix that passes HubID into ServerConfig).
+	if hubID != "" {
+		for _, legacyScopeID := range []string{"hub", ""} {
+			if legacyScopeID == hubID {
+				continue
+			}
+			val, legacyErr := s.store.GetSecretValue(ctx, keyName, store.ScopeHub, legacyScopeID)
+			if legacyErr != nil {
+				continue
+			}
+			slog.Info("Loaded signing key from legacy scope ID, will migrate", "key", keyName, "legacyScopeID", legacyScopeID)
 			key, decErr := base64.StdEncoding.DecodeString(val)
 			if decErr != nil {
 				return nil, fmt.Errorf("failed to decode legacy signing key %s: %w", keyName, decErr)
 			}
-			// Re-save under the new hub ID so future lookups find it directly
-			sec := &store.Secret{
-				ID:             fmt.Sprintf("hub-%s", keyName),
-				Key:            keyName,
-				EncryptedValue: val,
-				Scope:          store.ScopeHub,
-				ScopeID:        hubID,
-				Description:    fmt.Sprintf("Hub signing key for %s", keyName),
+			// Delete the old record first — it may share the same primary key ID
+			// so an INSERT with the new scope_id would collide on the PK.
+			if delErr := s.store.DeleteSecret(ctx, keyName, store.ScopeHub, legacyScopeID); delErr != nil {
+				slog.Warn("Failed to delete legacy signing key record", "key", keyName, "legacyScopeID", legacyScopeID, "error", delErr)
 			}
-			if _, upsertErr := s.store.UpsertSecret(ctx, sec); upsertErr != nil {
-				slog.Warn("Failed to migrate signing key to new hub ID", "key", keyName, "error", upsertErr)
+			// Re-save under the current hub ID so lookups and listings find it
+			if err := s.persistSigningKey(ctx, keyName, val, hubID); err != nil {
+				slog.Warn("Failed to migrate signing key to new hub ID", "key", keyName, "error", err)
 			} else {
 				slog.Info("Migrated signing key to new hub ID scope", "key", keyName, "hubID", hubID)
 			}
@@ -746,21 +750,36 @@ func (s *Server) ensureSigningKey(ctx context.Context, keyName string, existingK
 	}
 
 	// Fallback: save directly to the store (hub-internal key, acceptable for local dev)
-	sec := &store.Secret{
-		ID:             fmt.Sprintf("hub-%s", keyName),
-		Key:            keyName,
-		EncryptedValue: encodedKey,
-		Scope:          store.ScopeHub,
-		ScopeID:        hubID,
-		Description:    fmt.Sprintf("Hub signing key for %s", keyName),
-	}
-	if _, err := s.store.UpsertSecret(ctx, sec); err != nil {
+	if err := s.persistSigningKey(ctx, keyName, encodedKey, hubID); err != nil {
 		slog.Warn("Failed to persist signing key", "key", keyName, "error", err)
 	} else {
 		slog.Info("Persisted new signing key to store", "key", keyName)
 	}
 
 	return newKey, nil
+}
+
+// persistSigningKey saves a signing key to the store with an ID scoped to the hub instance.
+func (s *Server) persistSigningKey(ctx context.Context, keyName, encodedValue, hubID string) error {
+	sec := &store.Secret{
+		ID:             signingKeySecretID(keyName, hubID),
+		Key:            keyName,
+		EncryptedValue: encodedValue,
+		Scope:          store.ScopeHub,
+		ScopeID:        hubID,
+		Description:    fmt.Sprintf("Hub signing key for %s", keyName),
+	}
+	_, err := s.store.UpsertSecret(ctx, sec)
+	return err
+}
+
+// signingKeySecretID returns a deterministic primary key for a signing key record,
+// scoped to the hub instance to avoid PK collisions during migration.
+func signingKeySecretID(keyName, hubID string) string {
+	if hubID == "" {
+		return fmt.Sprintf("hub-%s", keyName)
+	}
+	return fmt.Sprintf("hub-%s-%s", hubID, keyName)
 }
 
 // SetDispatcher sets the agent dispatcher for co-located runtime broker operations.
