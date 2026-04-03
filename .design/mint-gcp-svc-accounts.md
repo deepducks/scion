@@ -31,7 +31,7 @@ The Hub's operating service account needs two IAM roles on the Hub's GCP project
 
 | Role | Purpose |
 |------|---------|
-| `roles/iam.serviceAccountCreator` | Create and delete service accounts in the Hub project |
+| `roles/iam.serviceAccountCreator` | Create service accounts in the Hub project |
 | `roles/iam.serviceAccountTokenCreator` | Generate tokens for minted SAs (already required for BYOSA flow) |
 
 The Hub must also know its own GCP project ID. This is either:
@@ -47,10 +47,13 @@ POST /api/v1/groves/{groveId}/gcp-service-accounts/mint
 **Request Body:**
 ```json
 {
-  "display_name": "my-data-pipeline",       // optional, used for SA display name
-  "description": "Agent SA for data work"   // optional, SA description
+  "account_id": "my-data-pipeline",          // optional, custom SA account ID (slugified, validated)
+  "display_name": "My Data Pipeline SA",     // optional, used for SA display name
+  "description": "Agent SA for data work"    // optional, SA description
 }
 ```
+
+If `account_id` is omitted, a random ID is generated (`scion-{8-char-hex}`). If provided, it is prefixed with `scion-`, slugified, and validated against GCP's 6-30 char `[a-z][a-z0-9-]*[a-z0-9]` rules. The endpoint returns `409 Conflict` if the account ID already exists in the project.
 
 **Response:** Standard `GCPServiceAccount` object with additional fields:
 
@@ -72,15 +75,12 @@ POST /api/v1/groves/{groveId}/gcp-service-accounts/mint
 
 ### Service Account Naming
 
-GCP SA account IDs must be 6-30 chars, `[a-z][a-z0-9-]*[a-z0-9]`. Proposed scheme:
+GCP SA account IDs must be 6-30 chars, `[a-z][a-z0-9-]*[a-z0-9]`. Two modes:
 
-```
-scion-{8-char-random-hex}
-```
+- **Custom:** User provides `account_id` (e.g., `my-pipeline`). Prefixed to `scion-my-pipeline`, slugified, and validated. Returns `409` on collision.
+- **Auto-generated:** `scion-{8-char-random-hex}` (e.g., `scion-a1b2c3d4`).
 
-Example: `scion-a1b2c3d4@hub-project.iam.gserviceaccount.com`
-
-The display name is set from the request (or defaults to `"Scion agent ({grove-slug})"`) and the description includes the grove ID for traceability.
+The display name is set from the request (or defaults to `"Scion agent ({grove-slug})"`) and the description includes the grove ID and minting user for traceability.
 
 ### Data Model Changes
 
@@ -99,10 +99,10 @@ ALTER TABLE gcp_service_accounts ADD COLUMN managed INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE gcp_service_accounts ADD COLUMN managed_by TEXT NOT NULL DEFAULT '';
 ```
 
-This flag controls:
-- Whether the Hub will **delete the underlying GCP SA** when the registration is removed (vs. just unlinking for BYOSA).
-- Display in the UI (badge/label distinguishing "Hub-managed" vs. "User-provided").
-- Preventing users from re-registering a Hub-minted SA email as a BYOSA (would conflict).
+This flag is informational — it indicates origin, not lifecycle ownership:
+- Display in the UI (badge/label distinguishing "Hub-minted" vs. "User-provided").
+- The Hub does **not** delete the underlying GCP SA on removal — deletion of GCP resources is the project admin's responsibility.
+- Once minted, the SA email can be registered in other groves via the normal `service-accounts add` flow (treated as any other SA email).
 
 ### Implementation Components
 
@@ -113,14 +113,12 @@ New interface wrapping the GCP IAM Admin API (`google.golang.org/api/iam/v1`):
 ```go
 type GCPServiceAccountAdmin interface {
     CreateServiceAccount(ctx context.Context, projectID, accountID, displayName, description string) (email string, uniqueID string, err error)
-    DeleteServiceAccount(ctx context.Context, email string) error
     SetIAMPolicy(ctx context.Context, saEmail string, hubEmail string, role string) error
 }
 ```
 
 - `CreateServiceAccount` calls `iam.projects.serviceAccounts.create`.
 - After creation, `SetIAMPolicy` grants `roles/iam.serviceAccountTokenCreator` to the Hub SA on the new SA.
-- `DeleteServiceAccount` calls `iam.projects.serviceAccounts.delete`.
 
 #### 2. Mint Handler (`pkg/hub/handlers_gcp_identity.go`)
 
@@ -130,8 +128,8 @@ New handler method on `Server`:
 func (s *Server) mintGCPServiceAccount(w http.ResponseWriter, r *http.Request) {
     // 1. Authorize: require grove admin or hub admin
     // 2. Validate request
-    // 3. Generate account ID (scion-{random})
-    // 4. Call GCPServiceAccountAdmin.CreateServiceAccount()
+    // 3. Generate or validate account ID (custom slug or scion-{random})
+    // 4. Call GCPServiceAccountAdmin.CreateServiceAccount() — 409 on collision
     // 5. Call GCPServiceAccountAdmin.SetIAMPolicy() to grant token creator
     // 6. Create GCPServiceAccount record with managed=true, verified=true
     // 7. Audit log the creation
@@ -139,29 +137,15 @@ func (s *Server) mintGCPServiceAccount(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-#### 3. Enhanced Delete Handler
-
-When deleting a managed SA, also delete the underlying GCP service account:
-
-```go
-func (s *Server) deleteGCPServiceAccount(...) {
-    sa, _ := s.store.GetGCPServiceAccount(ctx, id)
-    // ... existing authz checks ...
-    if sa.Managed {
-        s.gcpSAAdmin.DeleteServiceAccount(ctx, sa.Email)
-    }
-    s.store.DeleteGCPServiceAccount(ctx, id)
-}
-```
-
-#### 4. CLI Command
+#### 3. CLI Command
 
 ```bash
-scion grove service-accounts mint                          # Mint with defaults
-scion grove service-accounts mint --name "my-pipeline"     # Custom display name
+scion grove service-accounts mint                                    # Mint with auto-generated ID
+scion grove service-accounts mint --account-id my-pipeline           # Custom account ID → scion-my-pipeline
+scion grove service-accounts mint --name "My Pipeline SA"            # Custom display name
 ```
 
-#### 5. ServerConfig Addition
+#### 4. ServerConfig Addition
 
 ```go
 type ServerConfig struct {
@@ -180,14 +164,14 @@ GCP imposes a default limit of **100 service accounts per project**. At scale th
 - Surface the current count on the Hub admin dashboard.
 - GCP quota can be raised to 1000+ via support request if needed.
 
-### Lifecycle & Cleanup
+### Lifecycle & Ownership
 
-Minted SAs should be cleaned up when:
-- Explicitly deleted by the user via `scion grove service-accounts remove`.
-- A grove is hard-deleted (cascade delete managed SAs).
-- A scheduled maintenance job detects orphaned SAs (no grove association).
+The Hub **mints** SAs but does not manage their GCP lifecycle beyond creation:
+- **Removal from grove:** `scion grove service-accounts remove` unlinks the SA from the grove in the Hub database. The underlying GCP SA is **not** deleted.
+- **Grove deletion:** Managed SAs are retained in GCP with a warning printed in the grove delete confirmation. Since an SA may be registered in multiple groves, coupling deletion to any single grove would be incorrect.
+- **GCP resource cleanup:** Deletion of the underlying GCP service account is the responsibility of the GCP project admin, outside of Scion.
 
-The `Managed` + `ManagedBy` fields enable multi-hub scenarios where only the originating hub should delete the GCP resource.
+The `ManagedBy` field records which Hub instance minted the SA, for traceability in multi-hub scenarios.
 
 ## Alternatives Considered
 
@@ -233,25 +217,25 @@ Wrap `gcloud iam service-accounts create` behind a `scion` CLI command that also
 
 2. **Permissionless by default:** Minted SAs have no IAM roles. Users must explicitly grant permissions on their own projects. The Hub does not facilitate this — it is an out-of-band action.
 
-3. **SA email as stable identifier:** Users will use minted SA emails in their own IAM policies. Deleting and re-creating a minted SA would create a new unique ID, so even if the email is reused, old IAM bindings are invalidated by GCP (30-day tombstone). The UI should warn before deletion of a managed SA that may have external bindings.
+3. **SA email as stable identifier:** Users will use minted SA emails in their own IAM policies. Since the Hub does not delete minted SAs, this is stable. If a GCP project admin deletes a minted SA, GCP's 30-day tombstone prevents email reuse with a different unique ID.
 
-4. **Audit trail:** All mint and delete operations are recorded via the existing audit logging infrastructure.
+4. **Audit trail:** All mint operations are recorded via the existing audit logging infrastructure.
 
-5. **Multi-tenancy:** The `managed_by` field prevents cross-hub deletion in federated deployments.
+5. **Multi-tenancy:** The `managed_by` field provides traceability in federated multi-hub deployments.
 
-## Open Questions
+## Resolved Decisions
 
-1. **Should minted SAs be re-assignable across groves?** Currently, SAs are scoped to a single grove. A minted SA could potentially be shared across groves owned by the same user. Should we support `scope: "user"` for minted SAs, or keep them strictly grove-scoped?
+1. **Cross-grove usage:** Once minted, an SA is just an email. Users can register it in any grove via `service-accounts add`. No special scoping needed.
 
-2. **Soft-delete for minted SAs?** GCP has a 30-day undelete window for deleted SAs. Should we implement a soft-delete in the Hub to match, or rely on GCP's native undelete?
+2. **SA deletion:** Out of scope for the Hub. Deletion of the underlying GCP resource is the GCP project admin's responsibility.
 
-3. **Should the Hub expose SA permissions?** Users need to grant IAM on their own projects. Should the Hub provide a "suggested gcloud command" or even a permission-granting flow (via user's OAuth token), or keep that entirely out-of-band?
+3. **IAM grant guidance:** Not provided. Users handle IAM grants out-of-band. Keep it simple.
 
-4. **Naming convention flexibility:** Is `scion-{random}` sufficient, or should users be able to specify a custom account ID (subject to validation)? Custom IDs improve readability in GCP console but risk collisions.
+4. **Naming:** Custom account IDs are supported via `--account-id`, with `scion-` prefix, slug enforcement, and `409` on collision. Falls back to `scion-{random}` if omitted.
 
-5. **Quota monitoring:** Should the Hub proactively check remaining SA quota in the project before attempting to mint, or just handle the quota-exceeded error reactively?
+5. **Quota monitoring:** Reactive. Handle the quota-exceeded error from GCP rather than pre-checking.
 
-6. **Grove deletion cascade:** When a grove is hard-deleted, should managed SAs be deleted immediately, or retained for a grace period (matching the soft-delete retention window)?
+6. **Grove deletion cascade:** SAs are retained (not deleted) when a grove is deleted. A warning is shown in the grove delete confirmation.
 
 ## Implementation Plan
 
@@ -259,19 +243,13 @@ Wrap `gcloud iam service-accounts create` behind a `scion` CLI command that also
 - [ ] Add `GCPProjectID` to `ServerConfig` with metadata-server auto-detection
 - [ ] Implement `GCPServiceAccountAdmin` interface and IAM Admin API client
 - [ ] Add `managed`/`managed_by` columns (new migration)
-- [ ] Implement `POST .../mint` endpoint with authz, audit logging
-- [ ] Update delete handler to cascade GCP SA deletion for managed SAs
-- [ ] Add `scion grove service-accounts mint` CLI command
+- [ ] Implement `POST .../mint` endpoint with authz, audit logging, slug validation
+- [ ] Add `scion grove service-accounts mint` CLI command (`--account-id`, `--name`)
+- [ ] Add grove-delete warning for retained managed SAs
 - [ ] Unit tests for admin client, handler, and store changes
 - [ ] Integration test with IAM API (requires test project)
 
-### Phase 2: Limits & Lifecycle
+### Phase 2: Limits & UI
 - [ ] Per-grove and global mint caps (configurable)
-- [ ] Cascade delete managed SAs on grove hard-delete
-- [ ] Orphan SA cleanup in maintenance scheduler
-- [ ] Web UI: mint button, managed badge, deletion warning
-
-### Phase 3: UX Enhancements
-- [ ] "Suggested gcloud command" output after minting (for granting IAM)
+- [ ] Web UI: mint button, managed badge
 - [ ] Quota visibility on admin dashboard
-- [ ] Bulk operations (mint N SAs for a grove)
