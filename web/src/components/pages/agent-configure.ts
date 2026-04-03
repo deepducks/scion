@@ -25,7 +25,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import { apiFetch, extractApiError } from '../../client/api.js';
-import type { Agent, CapabilityField, GCPServiceAccount, HarnessAdvancedCapabilities } from '../../shared/types.js';
+import type { Agent, CapabilityField, GCPIdentityConfig, GCPServiceAccount, HarnessAdvancedCapabilities } from '../../shared/types.js';
 import type { EnvEntry } from '../shared/env-editor.js';
 import '../shared/env-editor.js';
 
@@ -57,6 +57,7 @@ interface AppliedConfig {
   harnessAuth?: string;
   task?: string;
   env?: Record<string, string>;
+  gcpIdentity?: GCPIdentityConfig;
   inlineConfig?: ScionConfigPayload & {
     harness_config?: string;
   };
