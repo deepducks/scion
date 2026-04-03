@@ -613,11 +613,13 @@ func runHubStatus(cmd *cobra.Command, args []string) error {
 					status["scionVersionServer"] = health.ScionVersion
 
 					// Verify auth against server
+					jsonAuthVerified := false
 					if authInfo.MethodType != "none" {
 						meCtx, meCancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer meCancel()
 						if meUser, meErr := client.Auth().Me(meCtx); meErr == nil {
 							status["authVerified"] = true
+							jsonAuthVerified = true
 							status["authUser"] = map[string]string{
 								"id":          meUser.ID,
 								"email":       meUser.Email,
@@ -635,7 +637,7 @@ func runHubStatus(cmd *cobra.Command, args []string) error {
 					}
 
 					// Add grove context to JSON output
-					groveContext := getGroveContextJSON(client, resolvedPath, isGlobal, settings)
+					groveContext := getGroveContextJSON(client, resolvedPath, isGlobal, settings, jsonAuthVerified)
 					status["groveContext"] = groveContext
 				} else {
 					status["connected"] = false
@@ -684,6 +686,7 @@ func runHubStatus(cmd *cobra.Command, args []string) error {
 	var client hubclient.Client
 	var health *hubclient.HealthResponse
 	var clientErr error
+	authVerified := false
 
 	if endpoint != "" && !noHub {
 		client, clientErr = getHubClient(settings)
@@ -711,6 +714,7 @@ func runHubStatus(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Method:     %s (configured but not accepted by server)\n", authInfo.Method)
 			fmt.Println("            Run 'scion hub auth login' to authenticate.")
 		} else {
+			authVerified = true
 			fmt.Printf("Method:     %s\n", authInfo.Method)
 			if authInfo.IsDevAuth {
 				fmt.Println("            (development mode - not for production use)")
@@ -759,7 +763,7 @@ func runHubStatus(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Scion Version (Local):  %s\n", version.Short())
 
 			// Show grove context if we're in a grove
-			printGroveContext(client, resolvedPath, isGlobal, settings)
+			printGroveContext(client, resolvedPath, isGlobal, settings, authVerified)
 		}
 	}
 
@@ -767,7 +771,7 @@ func runHubStatus(cmd *cobra.Command, args []string) error {
 }
 
 // printGroveContext prints information about the current grove's registration and available brokers.
-func printGroveContext(client hubclient.Client, grovePath string, isGlobal bool, settings *config.Settings) {
+func printGroveContext(client hubclient.Client, grovePath string, isGlobal bool, settings *config.Settings, authVerified bool) {
 	// Determine grove name from path
 	groveName := config.GetGroveName(grovePath)
 	if isGlobal {
@@ -782,6 +786,14 @@ func printGroveContext(client hubclient.Client, grovePath string, isGlobal bool,
 		fmt.Printf("Type:       user global\n")
 	} else {
 		fmt.Printf("Type:       project\n")
+	}
+
+	// If not authenticated, we can't query the Hub for grove info
+	if !authVerified {
+		fmt.Printf("Linked:     unknown (not authenticated)\n")
+		fmt.Println()
+		fmt.Println("Authenticate with 'scion hub auth login' to view grove status.")
+		return
 	}
 
 	// Get git remote for this grove (if not global)
@@ -895,7 +907,7 @@ func printGroveContext(client hubclient.Client, grovePath string, isGlobal bool,
 }
 
 // getGroveContextJSON returns grove context information for JSON output.
-func getGroveContextJSON(client hubclient.Client, grovePath string, isGlobal bool, settings *config.Settings) map[string]interface{} {
+func getGroveContextJSON(client hubclient.Client, grovePath string, isGlobal bool, settings *config.Settings, authVerified bool) map[string]interface{} {
 	result := make(map[string]interface{})
 
 	// Determine grove name from path
@@ -910,6 +922,13 @@ func getGroveContextJSON(client hubclient.Client, grovePath string, isGlobal boo
 		result["type"] = "user global"
 	} else {
 		result["type"] = "project"
+	}
+
+	// If not authenticated, we can't query the Hub for grove info
+	if !authVerified {
+		result["linked"] = "unknown"
+		result["reason"] = "not authenticated"
+		return result
 	}
 
 	// Get git remote for this grove (if not global)
