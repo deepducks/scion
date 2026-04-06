@@ -84,6 +84,17 @@ type createGCPServiceAccountRequest struct {
 	Scopes      []string `json:"defaultScopes,omitempty"`
 }
 
+type verificationFailedDetails struct {
+	HubServiceAccountEmail string `json:"hubServiceAccountEmail"`
+	TargetEmail            string `json:"targetEmail"`
+}
+
+type createGCPServiceAccountResponse struct {
+	store.GCPServiceAccount
+	VerificationFailed  bool                       `json:"verificationFailed,omitempty"`
+	VerificationDetails *verificationFailedDetails `json:"verificationDetails,omitempty"`
+}
+
 func (s *Server) createGCPServiceAccount(w http.ResponseWriter, r *http.Request, groveID string) {
 	user := GetUserIdentityFromContext(r.Context())
 	if user == nil {
@@ -156,7 +167,31 @@ func (s *Server) createGCPServiceAccount(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, sa)
+	// Auto-verify impersonation after registration
+	resp := createGCPServiceAccountResponse{GCPServiceAccount: *sa}
+	if s.gcpTokenGenerator != nil {
+		if err := s.gcpTokenGenerator.VerifyImpersonation(r.Context(), sa.Email); err != nil {
+			sa.Verified = false
+			sa.VerificationStatus = "failed"
+			sa.VerificationError = err.Error()
+			_ = s.store.UpdateGCPServiceAccount(r.Context(), sa)
+			resp.GCPServiceAccount = *sa
+			resp.VerificationFailed = true
+			resp.VerificationDetails = &verificationFailedDetails{
+				HubServiceAccountEmail: s.gcpTokenGenerator.ServiceAccountEmail(),
+				TargetEmail:            sa.Email,
+			}
+		} else {
+			sa.Verified = true
+			sa.VerifiedAt = time.Now()
+			sa.VerificationStatus = "verified"
+			sa.VerificationError = ""
+			_ = s.store.UpdateGCPServiceAccount(r.Context(), sa)
+			resp.GCPServiceAccount = *sa
+		}
+	}
+
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 // GCPServiceAccountWithCapabilities wraps a service account with its per-item capabilities.

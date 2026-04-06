@@ -419,6 +419,96 @@ func TestMintGCPServiceAccount_ManagedFlagSet(t *testing.T) {
 	assert.True(t, sa.Managed)
 }
 
+func TestCreateGCPServiceAccount_AutoVerifySuccess(t *testing.T) {
+	srv, s := testServer(t)
+	groveID := createTestGroveForSA(t, srv, s)
+
+	// Set a mock token generator that always succeeds
+	srv.SetGCPTokenGenerator(&mockGCPTokenGenerator{email: "hub@test.iam.gserviceaccount.com"})
+
+	body := map[string]string{
+		"email":     "agent@my-project.iam.gserviceaccount.com",
+		"projectId": "my-project",
+	}
+
+	rec := doRequest(t, srv, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts", groveID), body)
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
+
+	var resp struct {
+		store.GCPServiceAccount
+		VerificationFailed  bool `json:"verificationFailed"`
+		VerificationDetails *struct {
+			HubServiceAccountEmail string `json:"hubServiceAccountEmail"`
+			TargetEmail            string `json:"targetEmail"`
+		} `json:"verificationDetails"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.True(t, resp.Verified, "should be verified")
+	assert.Equal(t, "verified", resp.VerificationStatus)
+	assert.False(t, resp.VerificationFailed, "verificationFailed should be false")
+	assert.Nil(t, resp.VerificationDetails, "no verification details on success")
+}
+
+func TestCreateGCPServiceAccount_AutoVerifyFailure(t *testing.T) {
+	srv, s := testServer(t)
+	groveID := createTestGroveForSA(t, srv, s)
+
+	// Set a mock token generator that always fails verification
+	srv.SetGCPTokenGenerator(&mockGCPTokenGeneratorVerifyFail{
+		email:     "hub@test.iam.gserviceaccount.com",
+		verifyErr: fmt.Errorf("hub service account cannot impersonate agent@my-project.iam.gserviceaccount.com"),
+	})
+
+	body := map[string]string{
+		"email":     "agent@my-project.iam.gserviceaccount.com",
+		"projectId": "my-project",
+	}
+
+	rec := doRequest(t, srv, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts", groveID), body)
+	// SA is still created successfully
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
+
+	var resp struct {
+		store.GCPServiceAccount
+		VerificationFailed  bool `json:"verificationFailed"`
+		VerificationDetails *struct {
+			HubServiceAccountEmail string `json:"hubServiceAccountEmail"`
+			TargetEmail            string `json:"targetEmail"`
+		} `json:"verificationDetails"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.False(t, resp.Verified, "should not be verified")
+	assert.Equal(t, "failed", resp.VerificationStatus)
+	assert.True(t, resp.VerificationFailed, "verificationFailed should be true")
+	require.NotNil(t, resp.VerificationDetails, "should include verification details")
+	assert.Equal(t, "hub@test.iam.gserviceaccount.com", resp.VerificationDetails.HubServiceAccountEmail)
+	assert.Equal(t, "agent@my-project.iam.gserviceaccount.com", resp.VerificationDetails.TargetEmail)
+}
+
+// mockGCPTokenGeneratorVerifyFail is a mock that fails VerifyImpersonation but succeeds on other ops.
+type mockGCPTokenGeneratorVerifyFail struct {
+	email     string
+	verifyErr error
+}
+
+func (m *mockGCPTokenGeneratorVerifyFail) GenerateAccessToken(_ context.Context, _ string, _ []string) (*GCPAccessToken, error) {
+	return &GCPAccessToken{AccessToken: "test-token", ExpiresIn: 3600, TokenType: "Bearer"}, nil
+}
+
+func (m *mockGCPTokenGeneratorVerifyFail) GenerateIDToken(_ context.Context, _ string, _ string) (*GCPIDToken, error) {
+	return &GCPIDToken{Token: "test-id-token"}, nil
+}
+
+func (m *mockGCPTokenGeneratorVerifyFail) VerifyImpersonation(_ context.Context, _ string) error {
+	return m.verifyErr
+}
+
+func (m *mockGCPTokenGeneratorVerifyFail) ServiceAccountEmail() string {
+	return m.email
+}
+
 func TestMintGCPServiceAccount_PerGroveCap_DifferentGroves(t *testing.T) {
 	srv, _, _ := testServerWithMinting(t)
 	srv.config.GCPMintCapPerGrove = 1

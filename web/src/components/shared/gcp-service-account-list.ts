@@ -285,8 +285,20 @@ export class ScionGCPServiceAccountList extends LitElement {
         throw new Error(await extractApiError(response, `HTTP ${response.status}: ${response.statusText}`));
       }
 
+      // Check if auto-verification failed after registration
+      const data = (await response.json().catch(() => ({}))) as {
+        verificationFailed?: boolean;
+        verificationDetails?: { hubServiceAccountEmail?: string; targetEmail?: string };
+      };
+
       this.closeDialog();
       await this.loadAccounts();
+
+      if (data.verificationFailed) {
+        this.verifyFailedHubEmail = data.verificationDetails?.hubServiceAccountEmail || '';
+        this.verifyFailedTargetEmail = data.verificationDetails?.targetEmail || email;
+        this.verifyFailedOpen = true;
+      }
     } catch (err) {
       console.error('Failed to register service account:', err);
       this.dialogError = err instanceof Error ? err.message : 'Failed to register service account';
@@ -856,6 +868,10 @@ export class ScionGCPServiceAccountList extends LitElement {
                 </p>
               `}
 
+          <p>
+            <strong>Note:</strong> This service account will not be usable for agent identity
+            assignment until verification succeeds.
+          </p>
           <p>After granting the role, click the refresh icon to re-check verification.</p>
         </div>
 
