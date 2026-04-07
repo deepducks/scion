@@ -230,7 +230,7 @@ func main() {
 		log.Error("failed to load space links", "error", err)
 	} else {
 		for _, link := range links {
-			pattern := fmt.Sprintf("grove.%s.>", link.GroveID)
+			pattern := fmt.Sprintf("scion.grove.%s.>", link.GroveID)
 			if err := broker.RequestSubscription(pattern); err != nil {
 				log.Warn("failed to request subscription for grove",
 					"grove_id", link.GroveID,

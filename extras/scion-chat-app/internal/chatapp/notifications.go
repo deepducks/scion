@@ -42,22 +42,30 @@ func NewNotificationRelay(store *state.Store, messenger Messenger, log *slog.Log
 
 // HandleBrokerMessage processes a message received via the broker plugin's Publish() path.
 // This is the primary notification delivery path.
+//
+// Topics follow the broker topic hierarchy with a "scion." prefix:
+//
+//	scion.grove.<groveID>.user.<userID>.messages  — user-targeted message
+//	scion.grove.<groveID>.agent.<slug>.messages   — agent notification
+//	scion.grove.<groveID>.broadcast               — grove broadcast
 func (n *NotificationRelay) HandleBrokerMessage(ctx context.Context, topic string, msg *messages.StructuredMessage) error {
-	// Parse topic to extract grove ID: "grove.<groveID>.agent.status" or "user.<userID>.message"
-	parts := strings.Split(topic, ".")
+	// Strip the "scion." prefix used by the broker topic hierarchy.
+	normalized := strings.TrimPrefix(topic, "scion.")
+
+	parts := strings.Split(normalized, ".")
 	if len(parts) < 2 {
 		n.log.Debug("ignoring message with short topic", "topic", topic)
 		return nil
 	}
 
 	switch {
-	case parts[0] == "user" && len(parts) >= 3 && parts[2] == "message":
-		// User-targeted message: "user.<userID>.message"
+	case parts[0] == "grove" && len(parts) >= 5 && parts[2] == "user":
+		// User-targeted message: "grove.<groveID>.user.<userID>.messages"
 		return n.handleUserMessage(ctx, msg)
 
 	case parts[0] == "grove" && len(parts) >= 4:
 		groveID := parts[1]
-		// Agent notification: "grove.<groveID>.agent.status" or similar
+		// Agent notification: "grove.<groveID>.agent.<slug>.messages" or similar
 		return n.handleAgentNotification(ctx, groveID, msg)
 
 	default:

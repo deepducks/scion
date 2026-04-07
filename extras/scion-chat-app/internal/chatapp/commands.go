@@ -532,7 +532,7 @@ func (r *CommandRouter) cmdLink(ctx context.Context, event *ChatEvent, args []st
 
 	// Request subscription for the grove's messages via broker plugin
 	if r.broker != nil {
-		pattern := fmt.Sprintf("grove.%s.>", grove.ID)
+		pattern := fmt.Sprintf("scion.grove.%s.>", grove.ID)
 		if err := r.broker.RequestSubscription(pattern); err != nil {
 			r.log.Warn("failed to request grove subscription", "grove_id", grove.ID, "error", err)
 		}

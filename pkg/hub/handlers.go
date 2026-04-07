@@ -1877,17 +1877,25 @@ func (s *Server) handleAgentOutboundMessage(w http.ResponseWriter, r *http.Reque
 	// Publish SSE event so connected browser clients get real-time inbox updates.
 	s.events.PublishUserMessage(ctx, storeMsg)
 
-	// Dispatch to external channels (Slack, webhook, email) if configured.
-	if s.channelRegistry != nil && s.channelRegistry.Len() > 0 {
-		structuredMsg := &messages.StructuredMessage{
-			Sender:      storeMsg.Sender,
-			SenderID:    storeMsg.SenderID,
-			Recipient:   storeMsg.Recipient,
-			RecipientID: storeMsg.RecipientID,
-			Msg:         storeMsg.Msg,
-			Type:        storeMsg.Type,
-			Urgent:      storeMsg.Urgent,
+	// Build a structured message for external dispatch paths.
+	structuredMsg := &messages.StructuredMessage{
+		Sender:      storeMsg.Sender,
+		SenderID:    storeMsg.SenderID,
+		Recipient:   storeMsg.Recipient,
+		RecipientID: storeMsg.RecipientID,
+		Msg:         storeMsg.Msg,
+		Type:        storeMsg.Type,
+		Urgent:      storeMsg.Urgent,
+	}
+
+	// Dispatch through message broker plugin (e.g., chat app) if configured.
+	if bp := s.GetMessageBrokerProxy(); bp != nil {
+		if err := bp.PublishUserMessage(ctx, agent.GroveID, recipientID, structuredMsg); err != nil {
+			s.messageLog.Error("Failed to dispatch outbound message through broker",
+				"agent_id", agent.ID, "recipient_id", recipientID, "error", err)
 		}
+	} else if s.channelRegistry != nil && s.channelRegistry.Len() > 0 {
+		// Fall back to external channels (Slack, webhook, email) when no broker is configured.
 		s.channelRegistry.Dispatch(ctx, structuredMsg)
 	}
 
