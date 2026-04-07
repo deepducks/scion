@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/rpc"
+	"sync"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/broker"
 	"github.com/GoogleCloudPlatform/scion/pkg/messages"
@@ -370,5 +371,132 @@ func (s *pluginSubscription) Unsubscribe() error {
 		return err
 	}
 	delete(s.adapter.subs, s.pattern)
+	return nil
+}
+
+// --- Reconnecting adapter for self-managed broker plugins ---
+
+// reconnectingBrokerAdapter wraps a BrokerPluginAdapter for self-managed broker
+// plugins and automatically reconnects when RPC calls fail. This handles the
+// case where the external plugin process restarts while the Hub is still running.
+type reconnectingBrokerAdapter struct {
+	manager    *Manager
+	name       string
+	logger     *slog.Logger
+	mu         sync.Mutex
+	current    *BrokerPluginAdapter
+	activeSubs map[string]broker.MessageHandler // tracked for re-subscribe after reconnect
+	closed     bool
+}
+
+func newReconnectingBrokerAdapter(manager *Manager, name string, initial *BrokerPluginAdapter, logger *slog.Logger) *reconnectingBrokerAdapter {
+	return &reconnectingBrokerAdapter{
+		manager:    manager,
+		name:       name,
+		logger:     logger.With("component", "reconnecting-broker", "plugin", name),
+		current:    initial,
+		activeSubs: make(map[string]broker.MessageHandler),
+	}
+}
+
+// tryReconnect re-establishes the connection to the self-managed plugin and
+// re-subscribes to all active subscription patterns.
+func (a *reconnectingBrokerAdapter) tryReconnect() error {
+	a.logger.Info("Attempting reconnect to broker plugin")
+
+	if err := a.manager.Reconnect(PluginTypeBroker, a.name); err != nil {
+		return fmt.Errorf("reconnect failed: %w", err)
+	}
+
+	raw, err := a.manager.Get(PluginTypeBroker, a.name)
+	if err != nil {
+		return fmt.Errorf("get after reconnect failed: %w", err)
+	}
+	rpcClient, ok := raw.(*BrokerRPCClient)
+	if !ok {
+		return fmt.Errorf("reconnected plugin is not a BrokerRPCClient")
+	}
+
+	a.current = NewBrokerPluginAdapter(rpcClient)
+
+	// Re-establish subscriptions on the new connection.
+	for pattern, handler := range a.activeSubs {
+		if _, err := a.current.Subscribe(pattern, handler); err != nil {
+			a.logger.Warn("Failed to re-subscribe after reconnect",
+				"pattern", pattern, "error", err)
+		}
+	}
+
+	a.logger.Info("Successfully reconnected to broker plugin",
+		"resubscribed", len(a.activeSubs))
+	return nil
+}
+
+func (a *reconnectingBrokerAdapter) Publish(ctx context.Context, topic string, msg *messages.StructuredMessage) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return fmt.Errorf("adapter is closed")
+	}
+
+	err := a.current.Publish(ctx, topic, msg)
+	if err == nil {
+		return nil
+	}
+
+	a.logger.Warn("Publish failed, attempting reconnect", "topic", topic, "error", err)
+	if reconnErr := a.tryReconnect(); reconnErr != nil {
+		return fmt.Errorf("publish failed: %w (reconnect also failed: %v)", err, reconnErr)
+	}
+	return a.current.Publish(ctx, topic, msg)
+}
+
+func (a *reconnectingBrokerAdapter) Subscribe(pattern string, handler broker.MessageHandler) (broker.Subscription, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return nil, fmt.Errorf("adapter is closed")
+	}
+
+	sub, err := a.current.Subscribe(pattern, handler)
+	if err == nil {
+		a.activeSubs[pattern] = handler
+		return &reconnectingSub{adapter: a, pattern: pattern}, nil
+	}
+
+	a.logger.Warn("Subscribe failed, attempting reconnect", "pattern", pattern, "error", err)
+	if reconnErr := a.tryReconnect(); reconnErr != nil {
+		return nil, fmt.Errorf("subscribe failed: %w (reconnect also failed: %v)", err, reconnErr)
+	}
+	sub, err = a.current.Subscribe(pattern, handler)
+	if err != nil {
+		return nil, err
+	}
+	a.activeSubs[pattern] = handler
+	_ = sub // tracked by current adapter internally
+	return &reconnectingSub{adapter: a, pattern: pattern}, nil
+}
+
+func (a *reconnectingBrokerAdapter) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.closed = true
+	return a.current.Close()
+}
+
+// reconnectingSub implements broker.Subscription and tracks unsubscribes in
+// the reconnecting adapter's activeSubs map.
+type reconnectingSub struct {
+	adapter *reconnectingBrokerAdapter
+	pattern string
+}
+
+func (s *reconnectingSub) Unsubscribe() error {
+	s.adapter.mu.Lock()
+	defer s.adapter.mu.Unlock()
+	delete(s.adapter.activeSubs, s.pattern)
+	// Best-effort unsubscribe on current connection; if it's dead, the
+	// subscription is already gone.
+	_ = s.adapter.current.rpcClient.Unsubscribe(s.pattern)
 	return nil
 }

@@ -34,6 +34,7 @@ type Manager struct {
 	clients         map[string]*goplugin.Client // "type:name" -> client
 	dispensed       map[string]interface{}      // "type:name" -> dispensed interface (cached)
 	selfManaged     map[string]bool             // "type:name" -> true if self-managed
+	configs         map[string]DiscoveredPlugin // "type:name" -> original config (for reconnection)
 	mu              sync.RWMutex
 	logger          *slog.Logger
 	brokerCallbacks *HostCallbacksForwarder // lazily-wired host callbacks for broker plugins
@@ -48,6 +49,7 @@ func NewManager(logger *slog.Logger) *Manager {
 		clients:         make(map[string]*goplugin.Client),
 		dispensed:       make(map[string]interface{}),
 		selfManaged:     make(map[string]bool),
+		configs:         make(map[string]DiscoveredPlugin),
 		logger:          logger,
 		brokerCallbacks: &HostCallbacksForwarder{},
 	}
@@ -235,6 +237,9 @@ func (m *Manager) loadPlugin(dp DiscoveredPlugin) error {
 	}
 	m.clients[key] = client
 	m.selfManaged[key] = dp.SelfManaged
+	if dp.SelfManaged {
+		m.configs[key] = dp
+	}
 	// Cache the dispensed interface so subsequent Get() calls don't
 	// trigger a second Dispense (which would start another AcceptAndServe
 	// on the same MuxBroker stream ID, causing a timeout).
@@ -336,7 +341,25 @@ func (m *Manager) Get(pluginType, name string) (interface{}, error) {
 	return rpcClient.Dispense(dispenseName)
 }
 
+// Reconnect reloads a self-managed plugin by establishing a fresh connection
+// to its RPC address. This is used when a self-managed plugin process restarts
+// and the existing connection is dead.
+func (m *Manager) Reconnect(pluginType, name string) error {
+	key := pluginType + ":" + name
+	m.mu.RLock()
+	dp, ok := m.configs[key]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("no stored config for plugin %s/%s (not self-managed?)", pluginType, name)
+	}
+	m.logger.Info("Reconnecting to self-managed plugin",
+		"type", pluginType, "name", name, "address", dp.Address)
+	return m.loadPlugin(dp)
+}
+
 // GetBroker returns a broker.MessageBroker backed by the named broker plugin.
+// For self-managed plugins, it returns a reconnecting adapter that automatically
+// re-establishes the connection if the plugin process restarts.
 func (m *Manager) GetBroker(name string) (broker.MessageBroker, error) {
 	raw, err := m.Get(PluginTypeBroker, name)
 	if err != nil {
@@ -348,7 +371,11 @@ func (m *Manager) GetBroker(name string) (broker.MessageBroker, error) {
 		return nil, fmt.Errorf("plugin %s is not a broker plugin", name)
 	}
 
-	return NewBrokerPluginAdapter(rpcClient), nil
+	adapter := NewBrokerPluginAdapter(rpcClient)
+	if m.IsSelfManaged(PluginTypeBroker, name) {
+		return newReconnectingBrokerAdapter(m, name, adapter, m.logger), nil
+	}
+	return adapter, nil
 }
 
 // GetHarness returns an api.Harness backed by the named harness plugin.
@@ -415,6 +442,7 @@ func (m *Manager) Shutdown() {
 	m.clients = make(map[string]*goplugin.Client)
 	m.dispensed = make(map[string]interface{})
 	m.selfManaged = make(map[string]bool)
+	m.configs = make(map[string]DiscoveredPlugin)
 
 	goplugin.CleanupClients()
 }
