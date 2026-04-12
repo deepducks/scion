@@ -52,11 +52,29 @@ type KubernetesRuntime struct {
 	ListAllNamespaces bool // When true, List() queries all namespaces for scion pods
 }
 
+var serviceAccountNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 func NewKubernetesRuntime(client *k8s.Client) *KubernetesRuntime {
 	return &KubernetesRuntime{
 		Client:           client,
-		DefaultNamespace: "default",
+		DefaultNamespace: defaultKubernetesNamespace(),
 	}
+}
+
+func defaultKubernetesNamespace() string {
+	for _, envKey := range []string{"SCION_K8S_NAMESPACE", "POD_NAMESPACE"} {
+		if ns := strings.TrimSpace(os.Getenv(envKey)); ns != "" {
+			return ns
+		}
+	}
+
+	if data, err := os.ReadFile(serviceAccountNamespacePath); err == nil {
+		if ns := strings.TrimSpace(string(data)); ns != "" {
+			return ns
+		}
+	}
+
+	return "default"
 }
 
 // isGKEScheduling returns true when GKE Autopilot scheduling tolerance

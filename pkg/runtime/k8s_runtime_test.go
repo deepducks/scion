@@ -16,6 +16,8 @@ package runtime
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/api"
@@ -233,5 +235,62 @@ func TestKubernetesRuntime_BuildPod_Env(t *testing.T) {
 	}
 	if !foundLogname {
 		t.Errorf("LOGNAME not found in pod env")
+	}
+}
+
+func TestDefaultKubernetesNamespace(t *testing.T) {
+	t.Run("env overrides default", func(t *testing.T) {
+		t.Setenv("POD_NAMESPACE", "scion")
+		t.Setenv("SCION_K8S_NAMESPACE", "")
+		if got := defaultKubernetesNamespace(); got != "scion" {
+			t.Fatalf("defaultKubernetesNamespace() = %q, want %q", got, "scion")
+		}
+	})
+
+	t.Run("serviceaccount file used when env missing", func(t *testing.T) {
+		t.Setenv("POD_NAMESPACE", "")
+		t.Setenv("SCION_K8S_NAMESPACE", "")
+
+		tmpDir := t.TempDir()
+		nsFile := filepath.Join(tmpDir, "namespace")
+		if err := os.WriteFile(nsFile, []byte("scion-from-file\n"), 0644); err != nil {
+			t.Fatalf("failed to write temp namespace file: %v", err)
+		}
+
+		prev := serviceAccountNamespacePath
+		serviceAccountNamespacePath = nsFile
+		defer func() { serviceAccountNamespacePath = prev }()
+
+		if got := defaultKubernetesNamespace(); got != "scion-from-file" {
+			t.Fatalf("defaultKubernetesNamespace() = %q, want %q", got, "scion-from-file")
+		}
+	})
+
+	t.Run("default fallback", func(t *testing.T) {
+		t.Setenv("POD_NAMESPACE", "")
+		t.Setenv("SCION_K8S_NAMESPACE", "")
+
+		prev := serviceAccountNamespacePath
+		serviceAccountNamespacePath = filepath.Join(t.TempDir(), "missing")
+		defer func() { serviceAccountNamespacePath = prev }()
+
+		if got := defaultKubernetesNamespace(); got != "default" {
+			t.Fatalf("defaultKubernetesNamespace() = %q, want %q", got, "default")
+		}
+	})
+}
+
+func TestNewKubernetesRuntime_UsesDetectedNamespace(t *testing.T) {
+	clientset := k8sfake.NewClientset()
+	scheme := k8sruntime.NewScheme()
+	fc := fake.NewSimpleDynamicClient(scheme)
+	client := k8s.NewTestClient(fc, clientset)
+
+	t.Setenv("POD_NAMESPACE", "scion")
+	t.Setenv("SCION_K8S_NAMESPACE", "")
+
+	r := NewKubernetesRuntime(client)
+	if r.DefaultNamespace != "scion" {
+		t.Fatalf("DefaultNamespace = %q, want %q", r.DefaultNamespace, "scion")
 	}
 }
