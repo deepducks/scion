@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/store"
 	"github.com/stretchr/testify/assert"
@@ -539,4 +540,242 @@ func TestMintGCPServiceAccount_PerGroveCap_DifferentGroves(t *testing.T) {
 		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/mint", groveID1),
 		map[string]string{})
 	require.Equal(t, http.StatusConflict, rec.Code)
+}
+
+// ============================================================================
+// GCP Service Account Authorization Tests
+// ============================================================================
+
+// setupGCPAuthzTest creates a test server with three users and a grove:
+//   - owner: grove owner (non-admin member), in grove members group
+//   - member: grove member (non-admin), in grove members group
+//   - outsider: hub member but NOT in grove members group
+//
+// Returns the server, store, users, and grove.
+func setupGCPAuthzTest(t *testing.T) (*Server, store.Store, *store.User, *store.User, *store.User, *store.Grove) {
+	t.Helper()
+
+	srv, s := testServer(t)
+	ctx := context.Background()
+
+	owner := &store.User{
+		ID:          "user-gcp-owner",
+		Email:       "gcp-owner@test.com",
+		DisplayName: "GCP Owner",
+		Role:        store.UserRoleMember,
+		Status:      "active",
+		Created:     time.Now(),
+	}
+	member := &store.User{
+		ID:          "user-gcp-member",
+		Email:       "gcp-member@test.com",
+		DisplayName: "GCP Member",
+		Role:        store.UserRoleMember,
+		Status:      "active",
+		Created:     time.Now(),
+	}
+	outsider := &store.User{
+		ID:          "user-gcp-outsider",
+		Email:       "gcp-outsider@test.com",
+		DisplayName: "GCP Outsider",
+		Role:        store.UserRoleMember,
+		Status:      "active",
+		Created:     time.Now(),
+	}
+	for _, u := range []*store.User{owner, member, outsider} {
+		require.NoError(t, s.CreateUser(ctx, u))
+		ensureHubMembership(ctx, s, u.ID)
+	}
+
+	grove := &store.Grove{
+		ID:        "grove-gcp-authz",
+		Name:      "GCP Authz Grove",
+		Slug:      "gcp-authz-grove",
+		OwnerID:   owner.ID,
+		CreatedBy: owner.ID,
+		Created:   time.Now(),
+		Updated:   time.Now(),
+	}
+	require.NoError(t, s.CreateGrove(ctx, grove))
+
+	// Create grove members group and policies (simulates grove creation handler)
+	srv.createGroveMembersGroupAndPolicy(ctx, grove)
+
+	// Add member to grove members group
+	membersGroup, err := s.GetGroupBySlug(ctx, "grove:gcp-authz-grove:members")
+	require.NoError(t, err)
+	require.NoError(t, s.AddGroupMember(ctx, &store.GroupMember{
+		GroupID:    membersGroup.ID,
+		MemberType: store.GroupMemberTypeUser,
+		MemberID:   member.ID,
+		Role:       store.GroupMemberRoleMember,
+	}))
+
+	return srv, s, owner, member, outsider, grove
+}
+
+func TestGCPSA_Create_GroveOwnerAllowed(t *testing.T) {
+	srv, _, owner, _, _, grove := setupGCPAuthzTest(t)
+
+	rec := doRequestAsUser(t, srv, owner, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts", grove.ID),
+		map[string]string{"email": "sa@proj.iam.gserviceaccount.com", "projectId": "proj"})
+	require.Equal(t, http.StatusCreated, rec.Code,
+		"grove owner should be able to create SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Create_MemberDenied(t *testing.T) {
+	srv, _, _, member, _, grove := setupGCPAuthzTest(t)
+
+	rec := doRequestAsUser(t, srv, member, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts", grove.ID),
+		map[string]string{"email": "sa@proj.iam.gserviceaccount.com", "projectId": "proj"})
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"grove member should not be able to create SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Create_OutsiderDenied(t *testing.T) {
+	srv, _, _, _, outsider, grove := setupGCPAuthzTest(t)
+
+	rec := doRequestAsUser(t, srv, outsider, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts", grove.ID),
+		map[string]string{"email": "sa@proj.iam.gserviceaccount.com", "projectId": "proj"})
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"outsider should not be able to create SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Delete_GroveOwnerAllowed(t *testing.T) {
+	srv, s, owner, _, _, grove := setupGCPAuthzTest(t)
+	ctx := context.Background()
+
+	sa := &store.GCPServiceAccount{
+		ID:        "sa-del-owner",
+		Scope:     store.ScopeGrove,
+		ScopeID:   grove.ID,
+		Email:     "del-owner@proj.iam.gserviceaccount.com",
+		ProjectID: "proj",
+		CreatedBy: owner.ID,
+		CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateGCPServiceAccount(ctx, sa))
+
+	rec := doRequestAsUser(t, srv, owner, http.MethodDelete,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/%s", grove.ID, sa.ID), nil)
+	require.Equal(t, http.StatusNoContent, rec.Code,
+		"grove owner should be able to delete SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Delete_MemberDenied(t *testing.T) {
+	srv, s, owner, member, _, grove := setupGCPAuthzTest(t)
+	ctx := context.Background()
+
+	sa := &store.GCPServiceAccount{
+		ID:        "sa-del-member",
+		Scope:     store.ScopeGrove,
+		ScopeID:   grove.ID,
+		Email:     "del-member@proj.iam.gserviceaccount.com",
+		ProjectID: "proj",
+		CreatedBy: owner.ID,
+		CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateGCPServiceAccount(ctx, sa))
+
+	rec := doRequestAsUser(t, srv, member, http.MethodDelete,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/%s", grove.ID, sa.ID), nil)
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"grove member should not be able to delete SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Mint_GroveOwnerAllowed(t *testing.T) {
+	srv, _, owner, _, _, grove := setupGCPAuthzTest(t)
+
+	mock := &mockGCPServiceAccountAdmin{}
+	srv.SetGCPServiceAccountAdmin(mock)
+	srv.SetGCPProjectID("test-hub-project")
+	srv.SetGCPTokenGenerator(&mockGCPTokenGenerator{email: "hub-sa@test-hub-project.iam.gserviceaccount.com"})
+
+	rec := doRequestAsUser(t, srv, owner, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/mint", grove.ID),
+		map[string]string{})
+	require.Equal(t, http.StatusCreated, rec.Code,
+		"grove owner should be able to mint SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Mint_MemberDenied(t *testing.T) {
+	srv, _, _, member, _, grove := setupGCPAuthzTest(t)
+
+	mock := &mockGCPServiceAccountAdmin{}
+	srv.SetGCPServiceAccountAdmin(mock)
+	srv.SetGCPProjectID("test-hub-project")
+	srv.SetGCPTokenGenerator(&mockGCPTokenGenerator{email: "hub-sa@test-hub-project.iam.gserviceaccount.com"})
+
+	rec := doRequestAsUser(t, srv, member, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/mint", grove.ID),
+		map[string]string{})
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"grove member should not be able to mint SA; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Verify_GroveOwnerAllowed(t *testing.T) {
+	srv, s, owner, _, _, grove := setupGCPAuthzTest(t)
+	ctx := context.Background()
+
+	sa := &store.GCPServiceAccount{
+		ID:        "sa-verify-owner",
+		Scope:     store.ScopeGrove,
+		ScopeID:   grove.ID,
+		Email:     "verify@proj.iam.gserviceaccount.com",
+		ProjectID: "proj",
+		CreatedBy: owner.ID,
+		CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateGCPServiceAccount(ctx, sa))
+
+	rec := doRequestAsUser(t, srv, owner, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/%s/verify", grove.ID, sa.ID), nil)
+	// Should not be 403 — grove owner has manage permission
+	assert.NotEqual(t, http.StatusForbidden, rec.Code,
+		"grove owner should not get 403 for verify; got: %s", rec.Body.String())
+}
+
+func TestGCPSA_Verify_MemberDenied(t *testing.T) {
+	srv, s, owner, member, _, grove := setupGCPAuthzTest(t)
+	ctx := context.Background()
+
+	sa := &store.GCPServiceAccount{
+		ID:        "sa-verify-member",
+		Scope:     store.ScopeGrove,
+		ScopeID:   grove.ID,
+		Email:     "verify-m@proj.iam.gserviceaccount.com",
+		ProjectID: "proj",
+		CreatedBy: owner.ID,
+		CreatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateGCPServiceAccount(ctx, sa))
+
+	rec := doRequestAsUser(t, srv, member, http.MethodPost,
+		fmt.Sprintf("/api/v1/groves/%s/gcp-service-accounts/%s/verify", grove.ID, sa.ID), nil)
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"grove member should not be able to verify SA; got: %s", rec.Body.String())
+}
+
+// TestGCPSA_GroveOwnerCanAddMembers verifies that grove owners can add members
+// to the grove's members group (regression test for missing OwnerID on group).
+func TestGCPSA_GroveOwnerCanAddMembers(t *testing.T) {
+	srv, s, owner, _, outsider, grove := setupGCPAuthzTest(t)
+	ctx := context.Background()
+
+	membersGroup, err := s.GetGroupBySlug(ctx, "grove:"+grove.Slug+":members")
+	require.NoError(t, err)
+
+	// Grove owner should be able to add outsider as a member
+	body := AddGroupMemberRequest{
+		MemberType: "user",
+		MemberID:   outsider.ID,
+		Role:       "member",
+	}
+	rec := doRequestAsUser(t, srv, owner, http.MethodPost,
+		fmt.Sprintf("/api/v1/groups/%s/members", membersGroup.ID), body)
+	require.Equal(t, http.StatusCreated, rec.Code,
+		"grove owner should be able to add members to grove group; got: %s", rec.Body.String())
 }

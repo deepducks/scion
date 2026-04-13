@@ -132,12 +132,25 @@ func (s *Server) createGCPServiceAccount(w http.ResponseWriter, r *http.Request,
 	}
 
 	// Verify grove exists
-	if _, err := s.store.GetGrove(r.Context(), groveID); err != nil {
+	grove, err := s.store.GetGrove(r.Context(), groveID)
+	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			NotFound(w, "Grove")
 			return
 		}
 		writeErrorFromErr(w, err, "")
+		return
+	}
+
+	// Authorization: grove owners and admins can manage GCP service accounts
+	decision := s.authzService.CheckAccess(r.Context(), user, Resource{
+		Type:    "grove",
+		ID:      grove.ID,
+		OwnerID: grove.OwnerID,
+	}, ActionManage)
+	if !decision.Allowed {
+		writeError(w, http.StatusForbidden, ErrCodeForbidden,
+			"You don't have permission to manage GCP service accounts in this grove", nil)
 		return
 	}
 
@@ -320,6 +333,23 @@ func (s *Server) deleteGCPServiceAccount(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	// Authorization: grove owners and admins can manage GCP service accounts
+	grove, err := s.store.GetGrove(r.Context(), groveID)
+	if err != nil {
+		writeErrorFromErr(w, err, "")
+		return
+	}
+	decision := s.authzService.CheckAccess(r.Context(), user, Resource{
+		Type:    "grove",
+		ID:      grove.ID,
+		OwnerID: grove.OwnerID,
+	}, ActionManage)
+	if !decision.Allowed {
+		writeError(w, http.StatusForbidden, ErrCodeForbidden,
+			"You don't have permission to manage GCP service accounts in this grove", nil)
+		return
+	}
+
 	if err := s.store.DeleteGCPServiceAccount(r.Context(), saID); err != nil {
 		writeErrorFromErr(w, err, "")
 		return
@@ -329,6 +359,12 @@ func (s *Server) deleteGCPServiceAccount(w http.ResponseWriter, r *http.Request,
 }
 
 func (s *Server) verifyGCPServiceAccount(w http.ResponseWriter, r *http.Request, groveID, saID string) {
+	user := GetUserIdentityFromContext(r.Context())
+	if user == nil {
+		Forbidden(w)
+		return
+	}
+
 	sa, err := s.store.GetGCPServiceAccount(r.Context(), saID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -341,6 +377,23 @@ func (s *Server) verifyGCPServiceAccount(w http.ResponseWriter, r *http.Request,
 
 	if sa.ScopeID != groveID {
 		NotFound(w, "GCP Service Account")
+		return
+	}
+
+	// Authorization: grove owners and admins can manage GCP service accounts
+	grove, err := s.store.GetGrove(r.Context(), groveID)
+	if err != nil {
+		writeErrorFromErr(w, err, "")
+		return
+	}
+	decision := s.authzService.CheckAccess(r.Context(), user, Resource{
+		Type:    "grove",
+		ID:      grove.ID,
+		OwnerID: grove.OwnerID,
+	}, ActionManage)
+	if !decision.Allowed {
+		writeError(w, http.StatusForbidden, ErrCodeForbidden,
+			"You don't have permission to manage GCP service accounts in this grove", nil)
 		return
 	}
 
@@ -454,6 +507,18 @@ func (s *Server) mintGCPServiceAccount(w http.ResponseWriter, r *http.Request, g
 			return
 		}
 		writeErrorFromErr(w, err, "")
+		return
+	}
+
+	// Authorization: grove owners and admins can mint GCP service accounts
+	decision := s.authzService.CheckAccess(r.Context(), user, Resource{
+		Type:    "grove",
+		ID:      grove.ID,
+		OwnerID: grove.OwnerID,
+	}, ActionManage)
+	if !decision.Allowed {
+		writeError(w, http.StatusForbidden, ErrCodeForbidden,
+			"You don't have permission to manage GCP service accounts in this grove", nil)
 		return
 	}
 

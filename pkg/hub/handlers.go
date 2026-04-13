@@ -489,19 +489,6 @@ func (s *Server) createAgentInGrove(
 	// Validate GCP identity SA assignment: verify the SA exists, belongs to this grove, and is verified.
 	var resolvedGCPSA *store.GCPServiceAccount
 	if req.GCPIdentity != nil && req.GCPIdentity.MetadataMode == store.GCPMetadataModeAssign {
-		// Authorization: only users with grove manage permission can assign SAs
-		if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
-			decision := s.authzService.CheckAccess(ctx, userIdent, Resource{
-				Type: "grove",
-				ID:   groveID,
-			}, ActionManage)
-			if !decision.Allowed {
-				writeError(w, http.StatusForbidden, ErrCodeForbidden,
-					"You don't have permission to assign GCP service accounts in this grove", nil)
-				return
-			}
-		}
-
 		sa, err := s.store.GetGCPServiceAccount(ctx, req.GCPIdentity.ServiceAccountID)
 		if err != nil {
 			if err == store.ErrNotFound {
@@ -519,6 +506,18 @@ func (s *Server) createAgentInGrove(
 			ValidationError(w, "GCP service account is not verified; verify it before assigning to agents", nil)
 			return
 		}
+
+		// Authorization: any grove member who can see the SA can assign it.
+		// SA management (create/mint/delete) is gated on ActionManage elsewhere.
+		if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
+			decision := s.authzService.CheckAccess(ctx, userIdent, gcpServiceAccountResource(sa), ActionRead)
+			if !decision.Allowed {
+				writeError(w, http.StatusForbidden, ErrCodeForbidden,
+					"You don't have permission to assign GCP service accounts in this grove", nil)
+				return
+			}
+		}
+
 		resolvedGCPSA = sa
 	}
 
@@ -3092,6 +3091,7 @@ func (s *Server) createGroveMembersGroupAndPolicy(ctx context.Context, grove *st
 		Slug:      membersSlug,
 		GroupType: store.GroupTypeExplicit,
 		GroveID:   grove.ID,
+		OwnerID:   grove.OwnerID,
 		CreatedBy: grove.CreatedBy,
 	}
 	if err := s.store.CreateGroup(ctx, membersGroup); err != nil {
@@ -3107,11 +3107,20 @@ func (s *Server) createGroveMembersGroupAndPolicy(ctx context.Context, grove *st
 			return
 		}
 		membersGroup = existing
-		// Update the grove ID association in case it changed (recreated grove)
+		// Update the grove ID association or owner in case they changed (recreated grove
+		// or backfill for groups created before OwnerID was set).
+		needsUpdate := false
 		if membersGroup.GroveID != grove.ID {
 			membersGroup.GroveID = grove.ID
+			needsUpdate = true
+		}
+		if membersGroup.OwnerID == "" && grove.OwnerID != "" {
+			membersGroup.OwnerID = grove.OwnerID
+			needsUpdate = true
+		}
+		if needsUpdate {
 			if updateErr := s.store.UpdateGroup(ctx, membersGroup); updateErr != nil {
-				slog.Warn("failed to update existing grove members group grove ID",
+				slog.Warn("failed to update existing grove members group",
 					"grove_id", grove.ID, "slug", membersSlug, "error", updateErr.Error())
 			}
 		}

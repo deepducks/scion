@@ -514,24 +514,25 @@ func (s *Server) addGroupMember(w http.ResponseWriter, r *http.Request, group *s
 	}
 
 	// Enforce role-hierarchy: only owners can add owners/admins; admins can only add members.
-	if req.Role == store.GroupMemberRoleOwner || req.Role == store.GroupMemberRoleAdmin {
-		if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
+	// Platform admins and group resource owners bypass the role-hierarchy check.
+	if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
+		isResourceOwner := group.OwnerID != "" && group.OwnerID == userIdent.ID()
+		isPlatformAdmin := userIdent.Role() == "admin"
+		if !isResourceOwner && !isPlatformAdmin {
 			callerMembership, err := s.store.GetGroupMembership(ctx, groupID, store.GroupMemberTypeUser, userIdent.ID())
-			if err != nil || callerMembership.Role != store.GroupMemberRoleOwner {
-				writeError(w, http.StatusForbidden, ErrCodeForbidden,
-					"Only group owners can add owners or admins", nil)
-				return
-			}
-		}
-	} else if req.Role == store.GroupMemberRoleMember {
-		if userIdent := GetUserIdentityFromContext(ctx); userIdent != nil {
-			callerMembership, err := s.store.GetGroupMembership(ctx, groupID, store.GroupMemberTypeUser, userIdent.ID())
-			if err != nil || (callerMembership.Role != store.GroupMemberRoleOwner && callerMembership.Role != store.GroupMemberRoleAdmin) {
-				// The general authz check already passed, so only restrict if they are
-				// neither owner nor admin in the group itself
+			if req.Role == store.GroupMemberRoleOwner || req.Role == store.GroupMemberRoleAdmin {
+				if err != nil || callerMembership.Role != store.GroupMemberRoleOwner {
+					writeError(w, http.StatusForbidden, ErrCodeForbidden,
+						"Only group owners can add owners or admins", nil)
+					return
+				}
+			} else if req.Role == store.GroupMemberRoleMember {
 				if err != nil {
-					// Caller is not a member at all — authz may have allowed via policy,
-					// which is fine for general access but not for member management
+					writeError(w, http.StatusForbidden, ErrCodeForbidden,
+						"Only group owners or admins can add members", nil)
+					return
+				}
+				if callerMembership.Role != store.GroupMemberRoleOwner && callerMembership.Role != store.GroupMemberRoleAdmin {
 					writeError(w, http.StatusForbidden, ErrCodeForbidden,
 						"Only group owners or admins can add members", nil)
 					return
