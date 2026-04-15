@@ -5866,7 +5866,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totalCount := result.TotalCount
-	if identity != nil {
+	if identity != nil && len(users) < len(result.Items) {
 		totalCount = len(users)
 	}
 

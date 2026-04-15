@@ -492,7 +492,7 @@ export class ScionPageAdminUsers extends LitElement {
       };
       this.users = Array.isArray(data) ? data : data.users || [];
       this.nextCursor = (data as { nextCursor?: string }).nextCursor || null;
-      this.totalCount = (data as { totalCount?: number }).totalCount || this.users.length;
+      this.totalCount = (data as { totalCount?: number }).totalCount ?? this.users.length;
     } catch (err) {
       console.error('Failed to load users:', err);
       this.error = err instanceof Error ? err.message : 'Failed to load users';
