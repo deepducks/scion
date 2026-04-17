@@ -197,6 +197,11 @@ func (s *WorkflowRunStore) ListWorkflowRuns(ctx context.Context, opts store.Work
 }
 
 // CancelWorkflowRun atomically sets status to "canceled" for non-terminal runs.
+//
+// Per design doc Section 3.5, cancellation is idempotent: if the run is already
+// in a terminal state, the current run is returned without error. The handler
+// distinguishes between a fresh cancellation (202 Accepted) and a no-op on an
+// already-terminal run (200 OK) via the returned alreadyTerminal flag.
 func (s *WorkflowRunStore) CancelWorkflowRun(ctx context.Context, id string) (*store.WorkflowRun, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
@@ -209,7 +214,8 @@ func (s *WorkflowRunStore) CancelWorkflowRun(ctx context.Context, id string) (*s
 		return nil, mapError(err)
 	}
 
-	// Check if already terminal.
+	// If already terminal, return the current run without modification.
+	// ErrVersionConflict signals to the handler that no state change occurred.
 	switch r.Status {
 	case workflowrun.StatusSucceeded, workflowrun.StatusFailed, workflowrun.StatusCanceled, workflowrun.StatusTimedOut:
 		return entWorkflowRunToStore(r), store.ErrVersionConflict
@@ -228,8 +234,13 @@ func (s *WorkflowRunStore) CancelWorkflowRun(ctx context.Context, id string) (*s
 		Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			// Status was changed between the Get and UpdateOneID — treat as terminal.
-			return entWorkflowRunToStore(r), store.ErrVersionConflict
+			// Status was changed between the Get and UpdateOneID — re-fetch to
+			// return the current terminal state.
+			current, getErr := s.client.WorkflowRun.Get(ctx, uid)
+			if getErr != nil {
+				return nil, mapError(getErr)
+			}
+			return entWorkflowRunToStore(current), store.ErrVersionConflict
 		}
 		return nil, mapError(err)
 	}

@@ -293,7 +293,15 @@ func (s *Server) getWorkflowRun(w http.ResponseWriter, r *http.Request, runID st
 	writeJSON(w, http.StatusOK, api.WorkflowRunDetailResponse{Run: detail})
 }
 
-// cancelWorkflowRun handles POST /api/v1/workflows/runs/{runID}/cancel
+// cancelWorkflowRun handles POST /api/v1/workflows/runs/{runID}/cancel.
+//
+// Per design doc Section 3.5, cancellation is idempotent:
+//   - Fresh cancellation of a non-terminal run → 202 Accepted with the updated run.
+//   - Cancel of an already-terminal run (including already-canceled) → 200 OK
+//     with the current run state (no error).
+//
+// The underlying store returns ErrVersionConflict along with the current run
+// when the run is already terminal; we surface that as a 200 OK with body.
 func (s *Server) cancelWorkflowRun(w http.ResponseWriter, r *http.Request, runID string) {
 	ctx := r.Context()
 
@@ -302,14 +310,21 @@ func (s *Server) cancelWorkflowRun(w http.ResponseWriter, r *http.Request, runID
 		switch err {
 		case store.ErrNotFound:
 			writeError(w, http.StatusNotFound, "workflow_run_not_found", "Workflow run not found", nil)
+			return
 		case store.ErrVersionConflict:
-			// Already terminal: per design Section 3.5, terminal → 409.
+			// Already terminal: idempotent no-op, return current state with 200.
+			if updated != nil {
+				writeJSON(w, http.StatusOK, api.WorkflowRunResponse{Run: toWorkflowRunSummary(updated)})
+				return
+			}
+			// Defensive fallback: no run returned along with the conflict.
 			writeError(w, http.StatusConflict, "workflow_run_terminal",
-				"Workflow run is already in a terminal state and cannot be canceled", nil)
+				"Workflow run is already in a terminal state", nil)
+			return
 		default:
 			writeErrorFromErr(w, err, "")
+			return
 		}
-		return
 	}
 
 	writeJSON(w, http.StatusAccepted, api.WorkflowRunResponse{Run: toWorkflowRunSummary(updated)})

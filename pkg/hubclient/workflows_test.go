@@ -195,14 +195,19 @@ func TestCancelWorkflowRun_RequestShape(t *testing.T) {
 	}
 }
 
-func TestCancelWorkflowRun_TerminalRunError(t *testing.T) {
+func TestCancelWorkflowRun_ConflictFallbackDecodedAsError(t *testing.T) {
+	// The hub normally returns 200 with the current run on terminal cancel
+	// (idempotent per design doc Section 3.5). This test exercises the
+	// defensive fallback: if the server ever returns 409 (e.g. transient
+	// coordination error), the client decodes it as an error rather than
+	// crashing or silently returning a partial run.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": map[string]interface{}{
 				"code":    "workflow_run_terminal",
-				"message": "Workflow run is already in a terminal state and cannot be canceled",
+				"message": "Workflow run is already in a terminal state",
 			},
 		})
 	}))

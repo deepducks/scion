@@ -281,7 +281,9 @@ func TestWorkflowRun_Cancel_HappyPath(t *testing.T) {
 	assert.Equal(t, "canceled", resp.Run.Status)
 }
 
-func TestWorkflowRun_Cancel_TerminalRun_Returns409(t *testing.T) {
+func TestWorkflowRun_Cancel_TerminalRun_IsIdempotent(t *testing.T) {
+	// Per design doc Section 3.5, cancel on a terminal run returns 200 OK
+	// with the current run state (idempotent no-op).
 	srv, s, groveID := setupWorkflowRunTest(t)
 	ctx := context.Background()
 
@@ -294,19 +296,24 @@ func TestWorkflowRun_Cancel_TerminalRun_Returns409(t *testing.T) {
 	}
 	require.NoError(t, s.CreateWorkflowRun(ctx, run))
 
-	// Cancel once — succeeds.
+	// Cancel once — succeeds with 202.
 	rec1 := doRequest(t, srv, http.MethodPost,
 		"/api/v1/workflows/runs/"+run.ID+"/cancel", nil)
 	assert.Equal(t, http.StatusAccepted, rec1.Code)
 
-	// Cancel again on an already-canceled (terminal) run — expect 409.
+	// Cancel again on an already-canceled (terminal) run — idempotent 200 OK.
 	rec2 := doRequest(t, srv, http.MethodPost,
 		"/api/v1/workflows/runs/"+run.ID+"/cancel", nil)
-	assert.Equal(t, http.StatusConflict, rec2.Code)
+	assert.Equal(t, http.StatusOK, rec2.Code, rec2.Body.String())
+
+	var resp api.WorkflowRunResponse
+	require.NoError(t, json.NewDecoder(rec2.Body).Decode(&resp))
+	assert.Equal(t, "canceled", resp.Run.Status)
+	assert.Equal(t, run.ID, resp.Run.ID)
 }
 
 func TestWorkflowRun_Cancel_Idempotent_QueuedToCancel(t *testing.T) {
-	// First cancel on a queued run → 202. Second cancel → 409 (already terminal).
+	// First cancel on a queued run → 202. Second cancel → 200 (idempotent).
 	srv, s, groveID := setupWorkflowRunTest(t)
 	ctx := context.Background()
 
@@ -324,12 +331,12 @@ func TestWorkflowRun_Cancel_Idempotent_QueuedToCancel(t *testing.T) {
 		"/api/v1/workflows/runs/"+run.ID+"/cancel", nil)
 	assert.Equal(t, http.StatusAccepted, rec.Code)
 
-	// Second cancel — run is now terminal.
+	// Second cancel — already terminal, idempotent 200 OK.
 	rec2 := doRequest(t, srv, http.MethodPost,
 		"/api/v1/workflows/runs/"+run.ID+"/cancel", nil)
-	assert.Equal(t, http.StatusConflict, rec2.Code)
+	assert.Equal(t, http.StatusOK, rec2.Code)
 
-	var errResp ErrorResponse
-	require.NoError(t, json.NewDecoder(rec2.Body).Decode(&errResp))
-	assert.Equal(t, "workflow_run_terminal", errResp.Error.Code)
+	var resp api.WorkflowRunResponse
+	require.NoError(t, json.NewDecoder(rec2.Body).Decode(&resp))
+	assert.Equal(t, "canceled", resp.Run.Status)
 }
