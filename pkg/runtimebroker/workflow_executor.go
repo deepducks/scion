@@ -314,13 +314,10 @@ func (e *WorkflowExecutor) executeRun(ctx context.Context, connName string, req 
 				Target: "/workflow",
 			},
 		},
-		// CommandArgs carries the quack invocation. The Docker/Apple runtimes
-		// pass these after the image name so they become the container's CMD.
-		// Note: buildCommonRunArgs in common.go requires a non-nil Harness when
-		// Harness is set; we bypass harness entirely by leaving it nil and
-		// constructing a bare container command via a wrapper approach.
-		// The runtimes call Harness.GetCommand when Harness != nil; when nil
-		// they use CommandArgs directly (verified in docker.go Run path).
+		// CommandArgs carries the quack invocation. With Harness == nil,
+		// buildCommonRunArgs (pkg/runtime/common.go) takes the thin-provisioning
+		// branch and appends CommandArgs directly after the image, bypassing the
+		// tmux/harness wrapping used for interactive agent containers.
 		CommandArgs: []string{
 			"quack", "run",
 			"/workflow/workflow.yaml",

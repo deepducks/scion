@@ -137,7 +137,8 @@ type ServerConfig struct {
 
 	// DefaultAgentImage is the container image used for ephemeral workflow-run
 	// containers. It must include quack in /usr/local/bin or equivalent PATH
-	// location. Defaults to "scion-agent:latest" if empty.
+	// location. Defaults to "scion-base:latest" if empty (the scion-base image
+	// has quack baked in via the core-base layer, per image-build/README.md).
 	DefaultAgentImage string
 }
 
@@ -304,9 +305,12 @@ func New(cfg ServerConfig, mgr agent.Manager, rt scionrt.Runtime) *Server {
 	}
 
 	// Resolve the default agent image for workflow-run containers.
+	// scion-base has quack baked in (see image-build/core-base/Dockerfile),
+	// so it's the correct last-resort fallback. Callers SHOULD provide an
+	// explicit DefaultAgentImage matching their registry/tag.
 	workflowImage := cfg.DefaultAgentImage
 	if workflowImage == "" {
-		workflowImage = "scion-agent:latest"
+		workflowImage = "scion-base:latest"
 	}
 
 	// Initialize workflow executor.
