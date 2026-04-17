@@ -1359,6 +1359,18 @@ const (
 	WorkflowRunStatusTimedOut     = "timed_out"
 )
 
+// WorkflowRunTransition carries the fields to update when transitioning a
+// WorkflowRun to a new lifecycle status. Only non-nil pointer fields are written.
+type WorkflowRunTransition struct {
+	Status       string
+	BrokerID     *string
+	StartedAt    *time.Time
+	FinishedAt   *time.Time
+	ResultJSON   *string
+	ErrorMessage *string
+	TraceURL     *string
+}
+
 // WorkflowRunFilter defines criteria for filtering workflow runs.
 type WorkflowRunFilter struct {
 	GroveID string

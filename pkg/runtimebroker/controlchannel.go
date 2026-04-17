@@ -687,6 +687,31 @@ func (c *ControlChannelClient) handlePTYStream(handler *StreamHandler, cols, row
 	c.CloseStream(handler.streamID, "session ended", 0)
 }
 
+// SendEvent sends a TypeEvent message to the Hub over the control channel.
+// payload must be JSON-marshalable. Returns an error if not connected or
+// if the write fails.
+func (c *ControlChannelClient) SendEvent(eventType string, payload interface{}) error {
+	c.mu.RLock()
+	connected := c.connected
+	c.mu.RUnlock()
+
+	if !connected {
+		return fmt.Errorf("control channel not connected")
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event payload: %w", err)
+	}
+
+	msg := &wsprotocol.EventMessage{
+		Type:    wsprotocol.TypeEvent,
+		Event:   eventType,
+		Payload: payloadBytes,
+	}
+	return c.conn.WriteJSON(msg)
+}
+
 // SendStreamData sends data on a stream.
 func (c *ControlChannelClient) SendStreamData(streamID string, data []byte) error {
 	c.mu.RLock()

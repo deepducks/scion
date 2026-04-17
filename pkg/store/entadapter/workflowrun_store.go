@@ -247,6 +247,64 @@ func (s *WorkflowRunStore) CancelWorkflowRun(ctx context.Context, id string) (*s
 	return entWorkflowRunToStore(updated), nil
 }
 
+// TransitionWorkflowRun applies a lifecycle status update, optionally guarded by fromStatus.
+func (s *WorkflowRunStore) TransitionWorkflowRun(ctx context.Context, id string, update store.WorkflowRunTransition, fromStatus []string) (*store.WorkflowRun, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return nil, store.ErrNotFound
+	}
+
+	// CAS guard: check current status before updating.
+	if len(fromStatus) > 0 {
+		r, err := s.client.WorkflowRun.Get(ctx, uid)
+		if err != nil {
+			return nil, mapError(err)
+		}
+		currentStatus := string(r.Status)
+		allowed := false
+		for _, fs := range fromStatus {
+			if currentStatus == fs {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return entWorkflowRunToStore(r), store.ErrVersionConflict
+		}
+	}
+
+	u := s.client.WorkflowRun.UpdateOneID(uid).
+		SetStatus(workflowrun.Status(update.Status))
+
+	if update.BrokerID != nil {
+		u = u.SetBrokerID(*update.BrokerID)
+	}
+	if update.StartedAt != nil {
+		u = u.SetStartedAt(*update.StartedAt)
+	}
+	if update.FinishedAt != nil {
+		u = u.SetFinishedAt(*update.FinishedAt)
+	}
+	if update.ResultJSON != nil {
+		u = u.SetResultJSON([]byte(*update.ResultJSON))
+	}
+	if update.ErrorMessage != nil {
+		u = u.SetErrorMessage(*update.ErrorMessage)
+	}
+	if update.TraceURL != nil {
+		u = u.SetTraceURL(*update.TraceURL)
+	}
+
+	updated, err := u.Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, store.ErrNotFound
+		}
+		return nil, mapError(err)
+	}
+	return entWorkflowRunToStore(updated), nil
+}
+
 // Ensure WorkflowRunStore implements store.WorkflowRunStore.
 var _ store.WorkflowRunStore = (*WorkflowRunStore)(nil)
 

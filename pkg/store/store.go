@@ -1081,4 +1081,13 @@ type WorkflowRunStore interface {
 	// Returns ErrNotFound if the run does not exist.
 	// Returns ErrVersionConflict if the run is already in a terminal state.
 	CancelWorkflowRun(ctx context.Context, id string) (*WorkflowRun, error)
+
+	// TransitionWorkflowRun applies a lifecycle status update for a run.
+	// update.Status is the new status; other fields are applied only when non-nil/non-zero.
+	// The fromStatus slice, when non-empty, acts as a CAS guard: the update is
+	// only applied if the current status is one of the listed values.
+	// Returns the updated run.
+	// Returns ErrNotFound if the run does not exist.
+	// Returns ErrVersionConflict if the CAS guard fails (status mismatch).
+	TransitionWorkflowRun(ctx context.Context, id string, update WorkflowRunTransition, fromStatus []string) (*WorkflowRun, error)
 }

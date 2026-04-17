@@ -64,6 +64,11 @@ const (
 	EventAgentOutput  = "agent_output"
 	EventStreamReady  = "stream_ready"
 	EventStreamClosed = "stream_closed"
+
+	// Workflow run events (Broker → Hub)
+	EventWorkflowStatus = "workflow_status" // Lifecycle state change
+	EventWorkflowOutput = "workflow_output" // Terminal result: exit code, resultJson, traceKey
+	EventWorkflowLog    = "workflow_log"    // Stdout/stderr chunk
 )
 
 // Stream types for TypeStreamOpen
@@ -219,6 +224,30 @@ const (
 	ErrCodeBrokerDisconnected = "broker_disconnected"
 	ErrCodeInternalError      = "internal_error"
 )
+
+// WorkflowStatusPayload is the payload for workflow_status events.
+type WorkflowStatusPayload struct {
+	RunID  string `json:"runId"`
+	Status string `json:"status"`
+	At     string `json:"at"`
+}
+
+// WorkflowOutputPayload is the payload for workflow_output (terminal) events.
+type WorkflowOutputPayload struct {
+	RunID      string  `json:"runId"`
+	ExitCode   int     `json:"exitCode"`
+	ResultJSON *string `json:"resultJson,omitempty"`
+	Error      *string `json:"error,omitempty"`
+	TraceKey   string  `json:"traceKey,omitempty"`
+}
+
+// WorkflowLogPayload is the payload for workflow_log events.
+type WorkflowLogPayload struct {
+	RunID     string `json:"runId"`
+	Stream    string `json:"stream"` // "stdout" or "stderr"
+	Chunk     []byte `json:"chunk"`
+	Timestamp string `json:"timestamp"`
+}
 
 // ParseEnvelope extracts the message type from a raw JSON message.
 func ParseEnvelope(data []byte) (*Envelope, error) {

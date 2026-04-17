@@ -15,7 +15,9 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -206,7 +208,16 @@ func (s *Server) createWorkflowRun(w http.ResponseWriter, r *http.Request, grove
 	if err != nil {
 		// Created OK but can't re-fetch — return what we have.
 		writeJSON(w, http.StatusCreated, api.WorkflowRunResponse{Run: toWorkflowRunSummary(run)})
+		// Still attempt dispatch even if re-fetch failed.
+		if s.workflowDispatcher != nil {
+			s.workflowDispatcher.DispatchAsync(run.ID)
+		}
 		return
+	}
+
+	// Fire-and-forget dispatch: picks a broker and sends the run_workflow command.
+	if s.workflowDispatcher != nil {
+		s.workflowDispatcher.DispatchAsync(created.ID)
 	}
 
 	writeJSON(w, http.StatusCreated, api.WorkflowRunResponse{Run: toWorkflowRunSummary(created)})
@@ -305,6 +316,17 @@ func (s *Server) getWorkflowRun(w http.ResponseWriter, r *http.Request, runID st
 func (s *Server) cancelWorkflowRun(w http.ResponseWriter, r *http.Request, runID string) {
 	ctx := r.Context()
 
+	// Fetch run before cancel so we know the broker ID and prior status.
+	runBefore, fetchErr := s.store.GetWorkflowRun(ctx, runID)
+	if fetchErr != nil {
+		if fetchErr == store.ErrNotFound {
+			writeError(w, http.StatusNotFound, "workflow_run_not_found", "Workflow run not found", nil)
+			return
+		}
+		writeErrorFromErr(w, fetchErr, "")
+		return
+	}
+
 	updated, err := s.store.CancelWorkflowRun(ctx, runID)
 	if err != nil {
 		switch err {
@@ -327,15 +349,39 @@ func (s *Server) cancelWorkflowRun(w http.ResponseWriter, r *http.Request, runID
 		}
 	}
 
+	// If the run was provisioning or running, send cancel command to broker.
+	if s.workflowDispatcher != nil && runBefore.BrokerID != nil &&
+		(runBefore.Status == store.WorkflowRunStatusProvisioning ||
+			runBefore.Status == store.WorkflowRunStatusRunning) {
+		brokerID := *runBefore.BrokerID
+		go func() {
+			if err := s.workflowDispatcher.SendCancel(context.Background(), runID, brokerID); err != nil {
+				slog.Warn("Failed to send cancel command to broker", "runID", runID, "brokerID", brokerID, "error", err)
+			}
+		}()
+	}
+
 	writeJSON(w, http.StatusAccepted, api.WorkflowRunResponse{Run: toWorkflowRunSummary(updated)})
 }
 
-// streamWorkflowRunLogs handles GET (WSS upgrade) /api/v1/workflows/runs/{runID}/logs
-// Phase 3b stub: accept the upgrade, emit a single "not yet wired" event, then close.
+// streamWorkflowRunLogs handles GET (WSS upgrade) /api/v1/workflows/runs/{runID}/logs.
+//
+// The endpoint upgrades the connection to WebSocket, replays any buffered log
+// chunks from the dispatcher, then streams live events until the run reaches a
+// terminal state or the client disconnects.
+//
+// Each WebSocket text message is a JSON object with an "event" field:
+//
+//	{"event":"log","stream":"stdout","chunk":"<base64>","ts":"<RFC3339Nano>"}
+//	{"event":"status","status":"running","ts":"<RFC3339Nano>"}
+//	{"event":"terminal","status":"succeeded","exitCode":0,"ts":"<RFC3339Nano>"}
+//	{"event":"error","message":"..."}
 func (s *Server) streamWorkflowRunLogs(w http.ResponseWriter, r *http.Request, runID string) {
-	// Verify the run exists before upgrading.
 	ctx := r.Context()
-	if _, err := s.store.GetWorkflowRun(ctx, runID); err != nil {
+
+	// Verify the run exists before upgrading.
+	run, err := s.store.GetWorkflowRun(ctx, runID)
+	if err != nil {
 		if err == store.ErrNotFound {
 			writeError(w, http.StatusNotFound, "workflow_run_not_found", "Workflow run not found", nil)
 			return
@@ -344,22 +390,135 @@ func (s *Server) streamWorkflowRunLogs(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 
+	// Upgrade to WebSocket.
 	conn, err := workflowLogsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		// Upgrade failure is already reported by the upgrader.
 		return
 	}
 	defer conn.Close()
 
-	stub := map[string]interface{}{
-		"event": "logs_not_yet_wired",
-		"phase": "3c",
-		"ts":    time.Now().UTC().Format(time.RFC3339Nano),
+	// Helper to send a JSON message, ignoring write errors (connection may be gone).
+	sendMsg := func(v interface{}) {
+		data, err := json.Marshal(v)
+		if err != nil {
+			return
+		}
+		_ = conn.WriteMessage(websocket.TextMessage, data)
 	}
-	msg, _ := json.Marshal(stub)
-	_ = conn.WriteMessage(websocket.TextMessage, msg)
-	_ = conn.WriteMessage(websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "logs wiring arrives in Phase 3c"))
+
+	// If the run is already in a terminal state and the dispatcher is gone,
+	// emit a terminal event immediately and close.
+	isTerminal := func(status string) bool {
+		switch status {
+		case store.WorkflowRunStatusSucceeded,
+			store.WorkflowRunStatusFailed,
+			store.WorkflowRunStatusCanceled,
+			store.WorkflowRunStatusTimedOut:
+			return true
+		}
+		return false
+	}
+
+	if isTerminal(run.Status) && s.workflowDispatcher == nil {
+		sendMsg(map[string]interface{}{
+			"event":  "terminal",
+			"status": run.Status,
+			"ts":     time.Now().UTC().Format(time.RFC3339Nano),
+		})
+		_ = conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "run already terminal"))
+		return
+	}
+
+	// Subscribe to dispatcher events (also grabs buffered logs for replay).
+	var buffered []WorkflowLogEntry
+	var sub WorkflowRunSubscriber
+	var unsub func()
+	if s.workflowDispatcher != nil {
+		buffered, sub, unsub = s.workflowDispatcher.Subscribe(runID)
+		defer unsub()
+	}
+
+	// Replay buffered logs.
+	for i := range buffered {
+		entry := &buffered[i]
+		sendMsg(map[string]interface{}{
+			"event":  "log",
+			"stream": entry.Stream,
+			"chunk":  entry.Chunk,
+			"ts":     entry.Timestamp.UTC().Format(time.RFC3339Nano),
+		})
+	}
+
+	// If there is no dispatcher (shouldn't happen normally), close now.
+	if sub == nil {
+		if isTerminal(run.Status) {
+			sendMsg(map[string]interface{}{
+				"event":  "terminal",
+				"status": run.Status,
+				"ts":     time.Now().UTC().Format(time.RFC3339Nano),
+			})
+		}
+		_ = conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "no dispatcher"))
+		return
+	}
+
+	// Forward live events until terminal or client disconnects.
+	// We use a goroutine to read (and discard) client frames so we can detect disconnection.
+	clientGone := make(chan struct{})
+	go func() {
+		defer close(clientGone)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-clientGone:
+			return
+		case evt, ok := <-sub:
+			if !ok {
+				// Subscriber channel was closed by cleanupRun.
+				_ = conn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "run cleanup"))
+				return
+			}
+			switch evt.Kind {
+			case WorkflowRunEventLog:
+				if evt.Log != nil {
+					sendMsg(map[string]interface{}{
+						"event":  "log",
+						"stream": evt.Log.Stream,
+						"chunk":  evt.Log.Chunk,
+						"ts":     evt.Log.Timestamp.UTC().Format(time.RFC3339Nano),
+					})
+				}
+			case WorkflowRunEventStatus:
+				sendMsg(map[string]interface{}{
+					"event":  "status",
+					"status": evt.Status,
+					"ts":     evt.Timestamp.UTC().Format(time.RFC3339Nano),
+				})
+			case WorkflowRunEventTerminal:
+				sendMsg(map[string]interface{}{
+					"event":    "terminal",
+					"status":   evt.Status,
+					"exitCode": evt.ExitCode,
+					"error":    evt.Error,
+					"ts":       evt.Timestamp.UTC().Format(time.RFC3339Nano),
+				})
+				_ = conn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "run completed"))
+				return
+			}
+		}
+	}
 }
 
 // toWorkflowRunSummary converts a store.WorkflowRun to the wire summary type.

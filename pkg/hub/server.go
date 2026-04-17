@@ -502,6 +502,9 @@ type Server struct {
 	// Channel registry for external notification delivery (nil = disabled)
 	channelRegistry *ChannelRegistry
 
+	// WorkflowRunDispatcher manages broker dispatch for workflow runs (nil = disabled)
+	workflowDispatcher *WorkflowRunDispatcher
+
 	// GCP token generator for agent identity (nil = GCP identity disabled)
 	gcpTokenGenerator GCPTokenGenerator
 
@@ -687,6 +690,12 @@ func New(cfg ServerConfig, s store.Store) (*Server, error) {
 		}
 	})
 	slog.Info("Control channel manager initialized")
+
+	// Initialize workflow run dispatcher
+	srv.workflowDispatcher = NewWorkflowRunDispatcher(s, srv.controlChannel, logging.Subsystem("hub.workflow-dispatcher"))
+	// Wire the dispatcher into the control channel manager so broker events
+	// (workflow_status, workflow_output, workflow_log) are processed.
+	srv.controlChannel.SetWorkflowEventHandler(srv.workflowDispatcher)
 
 	// Initialize authorization service
 	srv.authzService = NewAuthzService(s, logging.Subsystem("hub.auth"))

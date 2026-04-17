@@ -46,3 +46,8 @@ func (s *SQLiteStore) ListWorkflowRuns(_ context.Context, _ store.WorkflowRunLis
 func (s *SQLiteStore) CancelWorkflowRun(_ context.Context, _ string) (*store.WorkflowRun, error) {
 	return nil, errWorkflowRunNotInSQLite
 }
+
+// TransitionWorkflowRun is a stub — overridden by the CompositeStore in production.
+func (s *SQLiteStore) TransitionWorkflowRun(_ context.Context, _ string, _ store.WorkflowRunTransition, _ []string) (*store.WorkflowRun, error) {
+	return nil, errWorkflowRunNotInSQLite
+}

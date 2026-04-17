@@ -59,6 +59,13 @@ func DefaultControlChannelConfig() ControlChannelConfig {
 }
 
 // ControlChannelManager manages WebSocket connections from Runtime Brokers.
+// WorkflowEventHandler processes broker-side workflow lifecycle events.
+type WorkflowEventHandler interface {
+	HandleWorkflowStatusEvent(ctx context.Context, brokerID string, payload wsprotocol.WorkflowStatusPayload)
+	HandleWorkflowOutputEvent(ctx context.Context, brokerID string, payload wsprotocol.WorkflowOutputPayload)
+	HandleWorkflowLogEvent(brokerID string, payload wsprotocol.WorkflowLogPayload)
+}
+
 type ControlChannelManager struct {
 	connections  map[string]*BrokerConnection // brokerID -> connection
 	mu           sync.RWMutex
@@ -66,6 +73,10 @@ type ControlChannelManager struct {
 	log          *slog.Logger
 	upgrader     websocket.Upgrader
 	onDisconnect func(brokerID string)
+
+	// workflowHandler processes workflow run events from connected brokers.
+	workflowHandlerMu sync.RWMutex
+	workflowHandler   WorkflowEventHandler
 }
 
 // NewControlChannelManager creates a new control channel manager.
@@ -91,6 +102,14 @@ func (m *ControlChannelManager) SetOnDisconnect(fn func(brokerID string)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onDisconnect = fn
+}
+
+// SetWorkflowEventHandler sets the handler for workflow lifecycle events emitted
+// by connected brokers. Must be called before any broker connects.
+func (m *ControlChannelManager) SetWorkflowEventHandler(h WorkflowEventHandler) {
+	m.workflowHandlerMu.Lock()
+	defer m.workflowHandlerMu.Unlock()
+	m.workflowHandler = h
 }
 
 // BrokerConnection represents an active control channel connection to a Runtime Broker.
@@ -411,6 +430,36 @@ func (m *ControlChannelManager) handleEvent(hc *BrokerConnection, data []byte) e
 		// TODO: Forward to interested clients
 		if m.config.Debug {
 			m.log.Debug("Agent status update via control channel", "brokerID", hc.brokerID)
+		}
+	case wsprotocol.EventWorkflowStatus:
+		m.workflowHandlerMu.RLock()
+		h := m.workflowHandler
+		m.workflowHandlerMu.RUnlock()
+		if h != nil && len(event.Payload) > 0 {
+			var payload wsprotocol.WorkflowStatusPayload
+			if err := json.Unmarshal(event.Payload, &payload); err == nil {
+				h.HandleWorkflowStatusEvent(context.Background(), hc.brokerID, payload)
+			}
+		}
+	case wsprotocol.EventWorkflowOutput:
+		m.workflowHandlerMu.RLock()
+		h := m.workflowHandler
+		m.workflowHandlerMu.RUnlock()
+		if h != nil && len(event.Payload) > 0 {
+			var payload wsprotocol.WorkflowOutputPayload
+			if err := json.Unmarshal(event.Payload, &payload); err == nil {
+				h.HandleWorkflowOutputEvent(context.Background(), hc.brokerID, payload)
+			}
+		}
+	case wsprotocol.EventWorkflowLog:
+		m.workflowHandlerMu.RLock()
+		h := m.workflowHandler
+		m.workflowHandlerMu.RUnlock()
+		if h != nil && len(event.Payload) > 0 {
+			var payload wsprotocol.WorkflowLogPayload
+			if err := json.Unmarshal(event.Payload, &payload); err == nil {
+				h.HandleWorkflowLogEvent(hc.brokerID, payload)
+			}
 		}
 	default:
 		if m.config.Debug {

@@ -191,6 +191,9 @@ type Server struct {
 
 	stateDir string
 
+	// workflowExecutor handles workflow run execution on this broker.
+	workflowExecutor *WorkflowExecutor
+
 	// auxiliaryRuntimes holds runtime+manager pairs for non-default runtimes
 	// created via profile resolution (e.g. kubernetes when default is docker).
 	// Used by LookupContainerID/LookupAgent as a fallback when the default
@@ -294,6 +297,13 @@ func New(cfg ServerConfig, mgr agent.Manager, rt scionrt.Runtime) *Server {
 			slog.Warn("Failed to initialize Hub integration", "error", err)
 		}
 	}
+
+	// Initialize workflow executor.
+	srv.workflowExecutor = NewWorkflowExecutor(
+		cfg.BrokerID,
+		srv.getControlChannelByName,
+		logging.Subsystem("broker.workflow-executor"),
+	)
 
 	srv.registerRoutes()
 
@@ -721,6 +731,36 @@ func (s *Server) GetHydrator() *templatecache.Hydrator {
 	for _, conn := range s.hubConnections {
 		if conn.Hydrator != nil {
 			return conn.Hydrator
+		}
+	}
+	return nil
+}
+
+// getControlChannelByName returns the ControlChannelClient for the named hub
+// connection, or for the first connected hub if name is empty. Returns nil when
+// no suitable channel is found.
+func (s *Server) getControlChannelByName(name string) *ControlChannelClient {
+	s.hubMu.RLock()
+	defer s.hubMu.RUnlock()
+
+	if name != "" {
+		if conn, ok := s.hubConnections[name]; ok {
+			conn.mu.RLock()
+			cc := conn.ControlChannel
+			conn.mu.RUnlock()
+			if cc != nil && cc.IsConnected() {
+				return cc
+			}
+		}
+	}
+
+	// Fallback: return the first connected control channel.
+	for _, conn := range s.hubConnections {
+		conn.mu.RLock()
+		cc := conn.ControlChannel
+		conn.mu.RUnlock()
+		if cc != nil && cc.IsConnected() {
+			return cc
 		}
 	}
 	return nil
@@ -1385,6 +1425,10 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/api/v1/workspace/upload", s.handleWorkspaceUpload)
 	s.mux.HandleFunc("/api/v1/workspace/apply", s.handleWorkspaceApply)
 	s.mux.HandleFunc("/api/v1/workspace/grove-upload", s.handleGroveWorkspaceUpload)
+
+	// Workflow run routes (Hub → Broker via control-channel tunnel).
+	s.mux.HandleFunc("/api/v1/workflow-runs", s.workflowExecutor.HandleCreateWorkflowRun)
+	s.mux.HandleFunc("/api/v1/workflow-runs/", s.workflowExecutor.HandleCancelWorkflowRun)
 }
 
 // applyMiddleware wraps the handler with middleware.

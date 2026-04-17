@@ -354,3 +354,7 @@ func (c *CompositeStore) ListWorkflowRuns(ctx context.Context, opts store.Workfl
 func (c *CompositeStore) CancelWorkflowRun(ctx context.Context, id string) (*store.WorkflowRun, error) {
 	return c.workflowRuns.CancelWorkflowRun(ctx, id)
 }
+
+func (c *CompositeStore) TransitionWorkflowRun(ctx context.Context, id string, update store.WorkflowRunTransition, fromStatus []string) (*store.WorkflowRun, error) {
+	return c.workflowRuns.TransitionWorkflowRun(ctx, id, update, fromStatus)
+}
