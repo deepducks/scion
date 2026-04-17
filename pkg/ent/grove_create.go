@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/agent"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/grove"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -157,6 +158,21 @@ func (_c *GroveCreate) AddAgents(v ...*Agent) *GroveCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddAgentIDs(ids...)
+}
+
+// AddWorkflowRunIDs adds the "workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_c *GroveCreate) AddWorkflowRunIDs(ids ...uuid.UUID) *GroveCreate {
+	_c.mutation.AddWorkflowRunIDs(ids...)
+	return _c
+}
+
+// AddWorkflowRuns adds the "workflow_runs" edges to the WorkflowRun entity.
+func (_c *GroveCreate) AddWorkflowRuns(v ...*WorkflowRun) *GroveCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddWorkflowRunIDs(ids...)
 }
 
 // Mutation returns the GroveMutation object of the builder.
@@ -323,6 +339,22 @@ func (_c *GroveCreate) createSpec() (*Grove, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(agent.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.WorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

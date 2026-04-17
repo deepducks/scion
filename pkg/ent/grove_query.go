@@ -15,17 +15,19 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/agent"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/grove"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/predicate"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
 // GroveQuery is the builder for querying Grove entities.
 type GroveQuery struct {
 	config
-	ctx        *QueryContext
-	order      []grove.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Grove
-	withAgents *AgentQuery
+	ctx              *QueryContext
+	order            []grove.OrderOption
+	inters           []Interceptor
+	predicates       []predicate.Grove
+	withAgents       *AgentQuery
+	withWorkflowRuns *WorkflowRunQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -77,6 +79,28 @@ func (_q *GroveQuery) QueryAgents() *AgentQuery {
 			sqlgraph.From(grove.Table, grove.FieldID, selector),
 			sqlgraph.To(agent.Table, agent.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, grove.AgentsTable, grove.AgentsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryWorkflowRuns chains the current query on the "workflow_runs" edge.
+func (_q *GroveQuery) QueryWorkflowRuns() *WorkflowRunQuery {
+	query := (&WorkflowRunClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(grove.Table, grove.FieldID, selector),
+			sqlgraph.To(workflowrun.Table, workflowrun.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, grove.WorkflowRunsTable, grove.WorkflowRunsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -271,12 +295,13 @@ func (_q *GroveQuery) Clone() *GroveQuery {
 		return nil
 	}
 	return &GroveQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]grove.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Grove{}, _q.predicates...),
-		withAgents: _q.withAgents.Clone(),
+		config:           _q.config,
+		ctx:              _q.ctx.Clone(),
+		order:            append([]grove.OrderOption{}, _q.order...),
+		inters:           append([]Interceptor{}, _q.inters...),
+		predicates:       append([]predicate.Grove{}, _q.predicates...),
+		withAgents:       _q.withAgents.Clone(),
+		withWorkflowRuns: _q.withWorkflowRuns.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -291,6 +316,17 @@ func (_q *GroveQuery) WithAgents(opts ...func(*AgentQuery)) *GroveQuery {
 		opt(query)
 	}
 	_q.withAgents = query
+	return _q
+}
+
+// WithWorkflowRuns tells the query-builder to eager-load the nodes that are connected to
+// the "workflow_runs" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GroveQuery) WithWorkflowRuns(opts ...func(*WorkflowRunQuery)) *GroveQuery {
+	query := (&WorkflowRunClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkflowRuns = query
 	return _q
 }
 
@@ -372,8 +408,9 @@ func (_q *GroveQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Grove,
 	var (
 		nodes       = []*Grove{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			_q.withAgents != nil,
+			_q.withWorkflowRuns != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -401,6 +438,13 @@ func (_q *GroveQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Grove,
 			return nil, err
 		}
 	}
+	if query := _q.withWorkflowRuns; query != nil {
+		if err := _q.loadWorkflowRuns(ctx, query, nodes,
+			func(n *Grove) { n.Edges.WorkflowRuns = []*WorkflowRun{} },
+			func(n *Grove, e *WorkflowRun) { n.Edges.WorkflowRuns = append(n.Edges.WorkflowRuns, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
@@ -419,6 +463,36 @@ func (_q *GroveQuery) loadAgents(ctx context.Context, query *AgentQuery, nodes [
 	}
 	query.Where(predicate.Agent(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(grove.AgentsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GroveID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "grove_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *GroveQuery) loadWorkflowRuns(ctx context.Context, query *WorkflowRunQuery, nodes []*Grove, init func(*Grove), assign func(*Grove, *WorkflowRun)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Grove)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(workflowrun.FieldGroveID)
+	}
+	query.Where(predicate.WorkflowRun(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(grove.WorkflowRunsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

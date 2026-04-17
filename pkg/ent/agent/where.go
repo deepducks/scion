@@ -681,6 +681,29 @@ func HasPolicyBindingsWith(preds ...predicate.PolicyBinding) predicate.Agent {
 	})
 }
 
+// HasCreatedWorkflowRuns applies the HasEdge predicate on the "created_workflow_runs" edge.
+func HasCreatedWorkflowRuns() predicate.Agent {
+	return predicate.Agent(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CreatedWorkflowRunsTable, CreatedWorkflowRunsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCreatedWorkflowRunsWith applies the HasEdge predicate on the "created_workflow_runs" edge with a given conditions (other predicates).
+func HasCreatedWorkflowRunsWith(preds ...predicate.WorkflowRun) predicate.Agent {
+	return predicate.Agent(func(s *sql.Selector) {
+		step := newCreatedWorkflowRunsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Agent) predicate.Agent {
 	return predicate.Agent(sql.AndPredicates(predicates...))

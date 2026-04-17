@@ -64,6 +64,7 @@ func (User) Edges() []ent.Edge {
 		edge.To("created_agents", Agent.Type),
 		edge.To("owned_agents", Agent.Type),
 		edge.To("owned_groups", Group.Type),
+		edge.To("created_workflow_runs", WorkflowRun.Type),
 		edge.From("memberships", GroupMembership.Type).
 			Ref("user"),
 		edge.From("policy_bindings", PolicyBinding.Type).

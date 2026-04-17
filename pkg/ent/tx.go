@@ -26,6 +26,8 @@ type Tx struct {
 	PolicyBinding *PolicyBindingClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// WorkflowRun is the client for interacting with the WorkflowRun builders.
+	WorkflowRun *WorkflowRunClient
 
 	// lazily loaded.
 	client     *Client
@@ -164,6 +166,7 @@ func (tx *Tx) init() {
 	tx.Grove = NewGroveClient(tx.config)
 	tx.PolicyBinding = NewPolicyBindingClient(tx.config)
 	tx.User = NewUserClient(tx.config)
+	tx.WorkflowRun = NewWorkflowRunClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

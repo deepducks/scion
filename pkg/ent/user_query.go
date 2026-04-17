@@ -18,21 +18,23 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/policybinding"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/predicate"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                *QueryContext
-	order              []user.OrderOption
-	inters             []Interceptor
-	predicates         []predicate.User
-	withCreatedAgents  *AgentQuery
-	withOwnedAgents    *AgentQuery
-	withOwnedGroups    *GroupQuery
-	withMemberships    *GroupMembershipQuery
-	withPolicyBindings *PolicyBindingQuery
+	ctx                     *QueryContext
+	order                   []user.OrderOption
+	inters                  []Interceptor
+	predicates              []predicate.User
+	withCreatedAgents       *AgentQuery
+	withOwnedAgents         *AgentQuery
+	withOwnedGroups         *GroupQuery
+	withCreatedWorkflowRuns *WorkflowRunQuery
+	withMemberships         *GroupMembershipQuery
+	withPolicyBindings      *PolicyBindingQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -128,6 +130,28 @@ func (_q *UserQuery) QueryOwnedGroups() *GroupQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(group.Table, group.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.OwnedGroupsTable, user.OwnedGroupsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCreatedWorkflowRuns chains the current query on the "created_workflow_runs" edge.
+func (_q *UserQuery) QueryCreatedWorkflowRuns() *WorkflowRunQuery {
+	query := (&WorkflowRunClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(workflowrun.Table, workflowrun.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.CreatedWorkflowRunsTable, user.CreatedWorkflowRunsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -366,16 +390,17 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:             _q.config,
-		ctx:                _q.ctx.Clone(),
-		order:              append([]user.OrderOption{}, _q.order...),
-		inters:             append([]Interceptor{}, _q.inters...),
-		predicates:         append([]predicate.User{}, _q.predicates...),
-		withCreatedAgents:  _q.withCreatedAgents.Clone(),
-		withOwnedAgents:    _q.withOwnedAgents.Clone(),
-		withOwnedGroups:    _q.withOwnedGroups.Clone(),
-		withMemberships:    _q.withMemberships.Clone(),
-		withPolicyBindings: _q.withPolicyBindings.Clone(),
+		config:                  _q.config,
+		ctx:                     _q.ctx.Clone(),
+		order:                   append([]user.OrderOption{}, _q.order...),
+		inters:                  append([]Interceptor{}, _q.inters...),
+		predicates:              append([]predicate.User{}, _q.predicates...),
+		withCreatedAgents:       _q.withCreatedAgents.Clone(),
+		withOwnedAgents:         _q.withOwnedAgents.Clone(),
+		withOwnedGroups:         _q.withOwnedGroups.Clone(),
+		withCreatedWorkflowRuns: _q.withCreatedWorkflowRuns.Clone(),
+		withMemberships:         _q.withMemberships.Clone(),
+		withPolicyBindings:      _q.withPolicyBindings.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -412,6 +437,17 @@ func (_q *UserQuery) WithOwnedGroups(opts ...func(*GroupQuery)) *UserQuery {
 		opt(query)
 	}
 	_q.withOwnedGroups = query
+	return _q
+}
+
+// WithCreatedWorkflowRuns tells the query-builder to eager-load the nodes that are connected to
+// the "created_workflow_runs" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithCreatedWorkflowRuns(opts ...func(*WorkflowRunQuery)) *UserQuery {
+	query := (&WorkflowRunClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withCreatedWorkflowRuns = query
 	return _q
 }
 
@@ -515,10 +551,11 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [5]bool{
+		loadedTypes = [6]bool{
 			_q.withCreatedAgents != nil,
 			_q.withOwnedAgents != nil,
 			_q.withOwnedGroups != nil,
+			_q.withCreatedWorkflowRuns != nil,
 			_q.withMemberships != nil,
 			_q.withPolicyBindings != nil,
 		}
@@ -559,6 +596,13 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadOwnedGroups(ctx, query, nodes,
 			func(n *User) { n.Edges.OwnedGroups = []*Group{} },
 			func(n *User, e *Group) { n.Edges.OwnedGroups = append(n.Edges.OwnedGroups, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withCreatedWorkflowRuns; query != nil {
+		if err := _q.loadCreatedWorkflowRuns(ctx, query, nodes,
+			func(n *User) { n.Edges.CreatedWorkflowRuns = []*WorkflowRun{} },
+			func(n *User, e *WorkflowRun) { n.Edges.CreatedWorkflowRuns = append(n.Edges.CreatedWorkflowRuns, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -673,6 +717,39 @@ func (_q *UserQuery) loadOwnedGroups(ctx context.Context, query *GroupQuery, nod
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "owner_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadCreatedWorkflowRuns(ctx context.Context, query *WorkflowRunQuery, nodes []*User, init func(*User), assign func(*User, *WorkflowRun)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(workflowrun.FieldCreatedByUserID)
+	}
+	query.Where(predicate.WorkflowRun(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.CreatedWorkflowRunsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.CreatedByUserID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "created_by_user_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "created_by_user_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

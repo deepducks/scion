@@ -16,6 +16,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/policybinding"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/schema"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -171,6 +172,21 @@ func (_c *UserCreate) AddOwnedGroups(v ...*Group) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddOwnedGroupIDs(ids...)
+}
+
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_c *UserCreate) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) *UserCreate {
+	_c.mutation.AddCreatedWorkflowRunIDs(ids...)
+	return _c
+}
+
+// AddCreatedWorkflowRuns adds the "created_workflow_runs" edges to the WorkflowRun entity.
+func (_c *UserCreate) AddCreatedWorkflowRuns(v ...*WorkflowRun) *UserCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddCreatedWorkflowRunIDs(ids...)
 }
 
 // AddMembershipIDs adds the "memberships" edge to the GroupMembership entity by IDs.
@@ -401,6 +417,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CreatedWorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

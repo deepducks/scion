@@ -60,9 +60,11 @@ type AgentEdges struct {
 	Memberships []*GroupMembership `json:"memberships,omitempty"`
 	// PolicyBindings holds the value of the policy_bindings edge.
 	PolicyBindings []*PolicyBinding `json:"policy_bindings,omitempty"`
+	// CreatedWorkflowRuns holds the value of the created_workflow_runs edge.
+	CreatedWorkflowRuns []*WorkflowRun `json:"created_workflow_runs,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [6]bool
 }
 
 // GroveOrErr returns the Grove value or an error if the edge
@@ -114,6 +116,15 @@ func (e AgentEdges) PolicyBindingsOrErr() ([]*PolicyBinding, error) {
 		return e.PolicyBindings, nil
 	}
 	return nil, &NotLoadedError{edge: "policy_bindings"}
+}
+
+// CreatedWorkflowRunsOrErr returns the CreatedWorkflowRuns value or an error if the edge
+// was not loaded in eager-loading.
+func (e AgentEdges) CreatedWorkflowRunsOrErr() ([]*WorkflowRun, error) {
+	if e.loadedTypes[5] {
+		return e.CreatedWorkflowRuns, nil
+	}
+	return nil, &NotLoadedError{edge: "created_workflow_runs"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -256,6 +267,11 @@ func (_m *Agent) QueryMemberships() *GroupMembershipQuery {
 // QueryPolicyBindings queries the "policy_bindings" edge of the Agent entity.
 func (_m *Agent) QueryPolicyBindings() *PolicyBindingQuery {
 	return NewAgentClient(_m.config).QueryPolicyBindings(_m)
+}
+
+// QueryCreatedWorkflowRuns queries the "created_workflow_runs" edge of the Agent entity.
+func (_m *Agent) QueryCreatedWorkflowRuns() *WorkflowRunQuery {
+	return NewAgentClient(_m.config).QueryCreatedWorkflowRuns(_m)
 }
 
 // Update returns a builder for updating this Agent.

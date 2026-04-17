@@ -87,6 +87,7 @@ func (Agent) Edges() []ent.Edge {
 			Ref("agent"),
 		edge.From("policy_bindings", PolicyBinding.Type).
 			Ref("agent"),
+		edge.To("created_workflow_runs", WorkflowRun.Type),
 	}
 }
 

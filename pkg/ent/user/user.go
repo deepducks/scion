@@ -38,6 +38,8 @@ const (
 	EdgeOwnedAgents = "owned_agents"
 	// EdgeOwnedGroups holds the string denoting the owned_groups edge name in mutations.
 	EdgeOwnedGroups = "owned_groups"
+	// EdgeCreatedWorkflowRuns holds the string denoting the created_workflow_runs edge name in mutations.
+	EdgeCreatedWorkflowRuns = "created_workflow_runs"
 	// EdgeMemberships holds the string denoting the memberships edge name in mutations.
 	EdgeMemberships = "memberships"
 	// EdgePolicyBindings holds the string denoting the policy_bindings edge name in mutations.
@@ -65,6 +67,13 @@ const (
 	OwnedGroupsInverseTable = "groups"
 	// OwnedGroupsColumn is the table column denoting the owned_groups relation/edge.
 	OwnedGroupsColumn = "owner_id"
+	// CreatedWorkflowRunsTable is the table that holds the created_workflow_runs relation/edge.
+	CreatedWorkflowRunsTable = "workflow_runs"
+	// CreatedWorkflowRunsInverseTable is the table name for the WorkflowRun entity.
+	// It exists in this package in order to avoid circular dependency with the "workflowrun" package.
+	CreatedWorkflowRunsInverseTable = "workflow_runs"
+	// CreatedWorkflowRunsColumn is the table column denoting the created_workflow_runs relation/edge.
+	CreatedWorkflowRunsColumn = "created_by_user_id"
 	// MembershipsTable is the table that holds the memberships relation/edge.
 	MembershipsTable = "group_memberships"
 	// MembershipsInverseTable is the table name for the GroupMembership entity.
@@ -253,6 +262,20 @@ func ByOwnedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByCreatedWorkflowRunsCount orders the results by created_workflow_runs count.
+func ByCreatedWorkflowRunsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCreatedWorkflowRunsStep(), opts...)
+	}
+}
+
+// ByCreatedWorkflowRuns orders the results by created_workflow_runs terms.
+func ByCreatedWorkflowRuns(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCreatedWorkflowRunsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByMembershipsCount orders the results by memberships count.
 func ByMembershipsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -299,6 +322,13 @@ func newOwnedGroupsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(OwnedGroupsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, OwnedGroupsTable, OwnedGroupsColumn),
+	)
+}
+func newCreatedWorkflowRunsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CreatedWorkflowRunsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CreatedWorkflowRunsTable, CreatedWorkflowRunsColumn),
 	)
 }
 func newMembershipsStep() *sqlgraph.Step {

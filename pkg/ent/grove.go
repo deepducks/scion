@@ -49,9 +49,11 @@ type Grove struct {
 type GroveEdges struct {
 	// Agents holds the value of the agents edge.
 	Agents []*Agent `json:"agents,omitempty"`
+	// WorkflowRuns holds the value of the workflow_runs edge.
+	WorkflowRuns []*WorkflowRun `json:"workflow_runs,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // AgentsOrErr returns the Agents value or an error if the edge
@@ -61,6 +63,15 @@ func (e GroveEdges) AgentsOrErr() ([]*Agent, error) {
 		return e.Agents, nil
 	}
 	return nil, &NotLoadedError{edge: "agents"}
+}
+
+// WorkflowRunsOrErr returns the WorkflowRuns value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroveEdges) WorkflowRunsOrErr() ([]*WorkflowRun, error) {
+	if e.loadedTypes[1] {
+		return e.WorkflowRuns, nil
+	}
+	return nil, &NotLoadedError{edge: "workflow_runs"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -178,6 +189,11 @@ func (_m *Grove) Value(name string) (ent.Value, error) {
 // QueryAgents queries the "agents" edge of the Grove entity.
 func (_m *Grove) QueryAgents() *AgentQuery {
 	return NewGroveClient(_m.config).QueryAgents(_m)
+}
+
+// QueryWorkflowRuns queries the "workflow_runs" edge of the Grove entity.
+func (_m *Grove) QueryWorkflowRuns() *WorkflowRunQuery {
+	return NewGroveClient(_m.config).QueryWorkflowRuns(_m)
 }
 
 // Update returns a builder for updating this Grove.

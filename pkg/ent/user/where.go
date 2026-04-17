@@ -495,6 +495,29 @@ func HasOwnedGroupsWith(preds ...predicate.Group) predicate.User {
 	})
 }
 
+// HasCreatedWorkflowRuns applies the HasEdge predicate on the "created_workflow_runs" edge.
+func HasCreatedWorkflowRuns() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CreatedWorkflowRunsTable, CreatedWorkflowRunsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCreatedWorkflowRunsWith applies the HasEdge predicate on the "created_workflow_runs" edge with a given conditions (other predicates).
+func HasCreatedWorkflowRunsWith(preds ...predicate.WorkflowRun) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newCreatedWorkflowRunsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasMemberships applies the HasEdge predicate on the "memberships" edge.
 func HasMemberships() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

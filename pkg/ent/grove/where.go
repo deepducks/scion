@@ -639,6 +639,29 @@ func HasAgentsWith(preds ...predicate.Agent) predicate.Grove {
 	})
 }
 
+// HasWorkflowRuns applies the HasEdge predicate on the "workflow_runs" edge.
+func HasWorkflowRuns() predicate.Grove {
+	return predicate.Grove(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, WorkflowRunsTable, WorkflowRunsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasWorkflowRunsWith applies the HasEdge predicate on the "workflow_runs" edge with a given conditions (other predicates).
+func HasWorkflowRunsWith(preds ...predicate.WorkflowRun) predicate.Grove {
+	return predicate.Grove(func(s *sql.Selector) {
+		step := newWorkflowRunsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Grove) predicate.Grove {
 	return predicate.Grove(sql.AndPredicates(predicates...))

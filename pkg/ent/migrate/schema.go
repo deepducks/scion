@@ -239,6 +239,62 @@ var (
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
 	}
+	// WorkflowRunsColumns holds the columns for the "workflow_runs" table.
+	WorkflowRunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "broker_id", Type: field.TypeString, Nullable: true},
+		{Name: "source_yaml", Type: field.TypeString, Size: 2147483647},
+		{Name: "inputs_json", Type: field.TypeBytes, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"queued", "provisioning", "running", "succeeded", "failed", "canceled", "timed_out"}, Default: "queued"},
+		{Name: "result_json", Type: field.TypeBytes, Nullable: true},
+		{Name: "error_message", Type: field.TypeString, Nullable: true},
+		{Name: "trace_url", Type: field.TypeString, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created", Type: field.TypeTime},
+		{Name: "updated", Type: field.TypeTime},
+		{Name: "created_by_agent_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "grove_id", Type: field.TypeUUID},
+		{Name: "created_by_user_id", Type: field.TypeUUID, Nullable: true},
+	}
+	// WorkflowRunsTable holds the schema information for the "workflow_runs" table.
+	WorkflowRunsTable = &schema.Table{
+		Name:       "workflow_runs",
+		Columns:    WorkflowRunsColumns,
+		PrimaryKey: []*schema.Column{WorkflowRunsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "workflow_runs_agents_created_workflow_runs",
+				Columns:    []*schema.Column{WorkflowRunsColumns[12]},
+				RefColumns: []*schema.Column{AgentsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "workflow_runs_groves_workflow_runs",
+				Columns:    []*schema.Column{WorkflowRunsColumns[13]},
+				RefColumns: []*schema.Column{GrovesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "workflow_runs_users_created_workflow_runs",
+				Columns:    []*schema.Column{WorkflowRunsColumns[14]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflowrun_grove_id_created",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunsColumns[13], WorkflowRunsColumns[10]},
+			},
+			{
+				Name:    "workflowrun_status",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunsColumns[4]},
+			},
+		},
+	}
 	// GroupChildGroupsColumns holds the columns for the "group_child_groups" table.
 	GroupChildGroupsColumns = []*schema.Column{
 		{Name: "group_id", Type: field.TypeUUID},
@@ -273,6 +329,7 @@ var (
 		GrovesTable,
 		PolicyBindingsTable,
 		UsersTable,
+		WorkflowRunsTable,
 		GroupChildGroupsTable,
 	}
 )
@@ -289,6 +346,9 @@ func init() {
 	PolicyBindingsTable.ForeignKeys[1].RefTable = UsersTable
 	PolicyBindingsTable.ForeignKeys[2].RefTable = GroupsTable
 	PolicyBindingsTable.ForeignKeys[3].RefTable = AgentsTable
+	WorkflowRunsTable.ForeignKeys[0].RefTable = AgentsTable
+	WorkflowRunsTable.ForeignKeys[1].RefTable = GrovesTable
+	WorkflowRunsTable.ForeignKeys[2].RefTable = UsersTable
 	GroupChildGroupsTable.ForeignKeys[0].RefTable = GroupsTable
 	GroupChildGroupsTable.ForeignKeys[1].RefTable = GroupsTable
 }

@@ -37,6 +37,8 @@ const (
 	FieldVisibility = "visibility"
 	// EdgeAgents holds the string denoting the agents edge name in mutations.
 	EdgeAgents = "agents"
+	// EdgeWorkflowRuns holds the string denoting the workflow_runs edge name in mutations.
+	EdgeWorkflowRuns = "workflow_runs"
 	// Table holds the table name of the grove in the database.
 	Table = "groves"
 	// AgentsTable is the table that holds the agents relation/edge.
@@ -46,6 +48,13 @@ const (
 	AgentsInverseTable = "agents"
 	// AgentsColumn is the table column denoting the agents relation/edge.
 	AgentsColumn = "grove_id"
+	// WorkflowRunsTable is the table that holds the workflow_runs relation/edge.
+	WorkflowRunsTable = "workflow_runs"
+	// WorkflowRunsInverseTable is the table name for the WorkflowRun entity.
+	// It exists in this package in order to avoid circular dependency with the "workflowrun" package.
+	WorkflowRunsInverseTable = "workflow_runs"
+	// WorkflowRunsColumn is the table column denoting the workflow_runs relation/edge.
+	WorkflowRunsColumn = "grove_id"
 )
 
 // Columns holds all SQL columns for grove fields.
@@ -151,10 +160,31 @@ func ByAgents(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newAgentsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByWorkflowRunsCount orders the results by workflow_runs count.
+func ByWorkflowRunsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newWorkflowRunsStep(), opts...)
+	}
+}
+
+// ByWorkflowRuns orders the results by workflow_runs terms.
+func ByWorkflowRuns(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowRunsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newAgentsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AgentsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, AgentsTable, AgentsColumn),
+	)
+}
+func newWorkflowRunsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkflowRunsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, WorkflowRunsTable, WorkflowRunsColumn),
 	)
 }

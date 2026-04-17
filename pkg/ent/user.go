@@ -50,13 +50,15 @@ type UserEdges struct {
 	OwnedAgents []*Agent `json:"owned_agents,omitempty"`
 	// OwnedGroups holds the value of the owned_groups edge.
 	OwnedGroups []*Group `json:"owned_groups,omitempty"`
+	// CreatedWorkflowRuns holds the value of the created_workflow_runs edge.
+	CreatedWorkflowRuns []*WorkflowRun `json:"created_workflow_runs,omitempty"`
 	// Memberships holds the value of the memberships edge.
 	Memberships []*GroupMembership `json:"memberships,omitempty"`
 	// PolicyBindings holds the value of the policy_bindings edge.
 	PolicyBindings []*PolicyBinding `json:"policy_bindings,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [6]bool
 }
 
 // CreatedAgentsOrErr returns the CreatedAgents value or an error if the edge
@@ -86,10 +88,19 @@ func (e UserEdges) OwnedGroupsOrErr() ([]*Group, error) {
 	return nil, &NotLoadedError{edge: "owned_groups"}
 }
 
+// CreatedWorkflowRunsOrErr returns the CreatedWorkflowRuns value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) CreatedWorkflowRunsOrErr() ([]*WorkflowRun, error) {
+	if e.loadedTypes[3] {
+		return e.CreatedWorkflowRuns, nil
+	}
+	return nil, &NotLoadedError{edge: "created_workflow_runs"}
+}
+
 // MembershipsOrErr returns the Memberships value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) MembershipsOrErr() ([]*GroupMembership, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[4] {
 		return e.Memberships, nil
 	}
 	return nil, &NotLoadedError{edge: "memberships"}
@@ -98,7 +109,7 @@ func (e UserEdges) MembershipsOrErr() ([]*GroupMembership, error) {
 // PolicyBindingsOrErr returns the PolicyBindings value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) PolicyBindingsOrErr() ([]*PolicyBinding, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.PolicyBindings, nil
 	}
 	return nil, &NotLoadedError{edge: "policy_bindings"}
@@ -215,6 +226,11 @@ func (_m *User) QueryOwnedAgents() *AgentQuery {
 // QueryOwnedGroups queries the "owned_groups" edge of the User entity.
 func (_m *User) QueryOwnedGroups() *GroupQuery {
 	return NewUserClient(_m.config).QueryOwnedGroups(_m)
+}
+
+// QueryCreatedWorkflowRuns queries the "created_workflow_runs" edge of the User entity.
+func (_m *User) QueryCreatedWorkflowRuns() *WorkflowRunQuery {
+	return NewUserClient(_m.config).QueryCreatedWorkflowRuns(_m)
 }
 
 // QueryMemberships queries the "memberships" edge of the User entity.

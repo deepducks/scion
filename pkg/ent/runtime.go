@@ -13,6 +13,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/policybinding"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/schema"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -170,4 +171,20 @@ func init() {
 	userDescID := userFields[0].Descriptor()
 	// user.DefaultID holds the default value on creation for the id field.
 	user.DefaultID = userDescID.Default.(func() uuid.UUID)
+	workflowrunFields := schema.WorkflowRun{}.Fields()
+	_ = workflowrunFields
+	// workflowrunDescCreated is the schema descriptor for created field.
+	workflowrunDescCreated := workflowrunFields[13].Descriptor()
+	// workflowrun.DefaultCreated holds the default value on creation for the created field.
+	workflowrun.DefaultCreated = workflowrunDescCreated.Default.(func() time.Time)
+	// workflowrunDescUpdated is the schema descriptor for updated field.
+	workflowrunDescUpdated := workflowrunFields[14].Descriptor()
+	// workflowrun.DefaultUpdated holds the default value on creation for the updated field.
+	workflowrun.DefaultUpdated = workflowrunDescUpdated.Default.(func() time.Time)
+	// workflowrun.UpdateDefaultUpdated holds the default value on update for the updated field.
+	workflowrun.UpdateDefaultUpdated = workflowrunDescUpdated.UpdateDefault.(func() time.Time)
+	// workflowrunDescID is the schema descriptor for id field.
+	workflowrunDescID := workflowrunFields[0].Descriptor()
+	// workflowrun.DefaultID holds the default value on creation for the id field.
+	workflowrun.DefaultID = workflowrunDescID.Default.(func() uuid.UUID)
 }

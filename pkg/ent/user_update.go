@@ -18,6 +18,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/predicate"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/schema"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -187,6 +188,21 @@ func (_u *UserUpdate) AddOwnedGroups(v ...*Group) *UserUpdate {
 	return _u.AddOwnedGroupIDs(ids...)
 }
 
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_u *UserUpdate) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) *UserUpdate {
+	_u.mutation.AddCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// AddCreatedWorkflowRuns adds the "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *UserUpdate) AddCreatedWorkflowRuns(v ...*WorkflowRun) *UserUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddCreatedWorkflowRunIDs(ids...)
+}
+
 // AddMembershipIDs adds the "memberships" edge to the GroupMembership entity by IDs.
 func (_u *UserUpdate) AddMembershipIDs(ids ...uuid.UUID) *UserUpdate {
 	_u.mutation.AddMembershipIDs(ids...)
@@ -283,6 +299,27 @@ func (_u *UserUpdate) RemoveOwnedGroups(v ...*Group) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveOwnedGroupIDs(ids...)
+}
+
+// ClearCreatedWorkflowRuns clears all "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *UserUpdate) ClearCreatedWorkflowRuns() *UserUpdate {
+	_u.mutation.ClearCreatedWorkflowRuns()
+	return _u
+}
+
+// RemoveCreatedWorkflowRunIDs removes the "created_workflow_runs" edge to WorkflowRun entities by IDs.
+func (_u *UserUpdate) RemoveCreatedWorkflowRunIDs(ids ...uuid.UUID) *UserUpdate {
+	_u.mutation.RemoveCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// RemoveCreatedWorkflowRuns removes "created_workflow_runs" edges to WorkflowRun entities.
+func (_u *UserUpdate) RemoveCreatedWorkflowRuns(v ...*WorkflowRun) *UserUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveCreatedWorkflowRunIDs(ids...)
 }
 
 // ClearMemberships clears all "memberships" edges to the GroupMembership entity.
@@ -556,6 +593,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedCreatedWorkflowRunsIDs(); len(nodes) > 0 && !_u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatedWorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.MembershipsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -819,6 +901,21 @@ func (_u *UserUpdateOne) AddOwnedGroups(v ...*Group) *UserUpdateOne {
 	return _u.AddOwnedGroupIDs(ids...)
 }
 
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_u *UserUpdateOne) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) *UserUpdateOne {
+	_u.mutation.AddCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// AddCreatedWorkflowRuns adds the "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *UserUpdateOne) AddCreatedWorkflowRuns(v ...*WorkflowRun) *UserUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddCreatedWorkflowRunIDs(ids...)
+}
+
 // AddMembershipIDs adds the "memberships" edge to the GroupMembership entity by IDs.
 func (_u *UserUpdateOne) AddMembershipIDs(ids ...uuid.UUID) *UserUpdateOne {
 	_u.mutation.AddMembershipIDs(ids...)
@@ -915,6 +1012,27 @@ func (_u *UserUpdateOne) RemoveOwnedGroups(v ...*Group) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveOwnedGroupIDs(ids...)
+}
+
+// ClearCreatedWorkflowRuns clears all "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *UserUpdateOne) ClearCreatedWorkflowRuns() *UserUpdateOne {
+	_u.mutation.ClearCreatedWorkflowRuns()
+	return _u
+}
+
+// RemoveCreatedWorkflowRunIDs removes the "created_workflow_runs" edge to WorkflowRun entities by IDs.
+func (_u *UserUpdateOne) RemoveCreatedWorkflowRunIDs(ids ...uuid.UUID) *UserUpdateOne {
+	_u.mutation.RemoveCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// RemoveCreatedWorkflowRuns removes "created_workflow_runs" edges to WorkflowRun entities.
+func (_u *UserUpdateOne) RemoveCreatedWorkflowRuns(v ...*WorkflowRun) *UserUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveCreatedWorkflowRunIDs(ids...)
 }
 
 // ClearMemberships clears all "memberships" edges to the GroupMembership entity.
@@ -1211,6 +1329,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedCreatedWorkflowRunsIDs(); len(nodes) > 0 && !_u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatedWorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.CreatedWorkflowRunsTable,
+			Columns: []string{user.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

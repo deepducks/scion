@@ -48,6 +48,8 @@ const (
 	EdgeMemberships = "memberships"
 	// EdgePolicyBindings holds the string denoting the policy_bindings edge name in mutations.
 	EdgePolicyBindings = "policy_bindings"
+	// EdgeCreatedWorkflowRuns holds the string denoting the created_workflow_runs edge name in mutations.
+	EdgeCreatedWorkflowRuns = "created_workflow_runs"
 	// Table holds the table name of the agent in the database.
 	Table = "agents"
 	// GroveTable is the table that holds the grove relation/edge.
@@ -85,6 +87,13 @@ const (
 	PolicyBindingsInverseTable = "policy_bindings"
 	// PolicyBindingsColumn is the table column denoting the policy_bindings relation/edge.
 	PolicyBindingsColumn = "agent_id"
+	// CreatedWorkflowRunsTable is the table that holds the created_workflow_runs relation/edge.
+	CreatedWorkflowRunsTable = "workflow_runs"
+	// CreatedWorkflowRunsInverseTable is the table name for the WorkflowRun entity.
+	// It exists in this package in order to avoid circular dependency with the "workflowrun" package.
+	CreatedWorkflowRunsInverseTable = "workflow_runs"
+	// CreatedWorkflowRunsColumn is the table column denoting the created_workflow_runs relation/edge.
+	CreatedWorkflowRunsColumn = "created_by_agent_id"
 )
 
 // Columns holds all SQL columns for agent fields.
@@ -275,6 +284,20 @@ func ByPolicyBindings(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newPolicyBindingsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByCreatedWorkflowRunsCount orders the results by created_workflow_runs count.
+func ByCreatedWorkflowRunsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCreatedWorkflowRunsStep(), opts...)
+	}
+}
+
+// ByCreatedWorkflowRuns orders the results by created_workflow_runs terms.
+func ByCreatedWorkflowRuns(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCreatedWorkflowRunsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newGroveStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -308,5 +331,12 @@ func newPolicyBindingsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PolicyBindingsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, true, PolicyBindingsTable, PolicyBindingsColumn),
+	)
+}
+func newCreatedWorkflowRunsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CreatedWorkflowRunsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CreatedWorkflowRunsTable, CreatedWorkflowRunsColumn),
 	)
 }

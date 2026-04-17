@@ -14,6 +14,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/agent"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/grove"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/predicate"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -177,6 +178,21 @@ func (_u *GroveUpdate) AddAgents(v ...*Agent) *GroveUpdate {
 	return _u.AddAgentIDs(ids...)
 }
 
+// AddWorkflowRunIDs adds the "workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_u *GroveUpdate) AddWorkflowRunIDs(ids ...uuid.UUID) *GroveUpdate {
+	_u.mutation.AddWorkflowRunIDs(ids...)
+	return _u
+}
+
+// AddWorkflowRuns adds the "workflow_runs" edges to the WorkflowRun entity.
+func (_u *GroveUpdate) AddWorkflowRuns(v ...*WorkflowRun) *GroveUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddWorkflowRunIDs(ids...)
+}
+
 // Mutation returns the GroveMutation object of the builder.
 func (_u *GroveUpdate) Mutation() *GroveMutation {
 	return _u.mutation
@@ -201,6 +217,27 @@ func (_u *GroveUpdate) RemoveAgents(v ...*Agent) *GroveUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAgentIDs(ids...)
+}
+
+// ClearWorkflowRuns clears all "workflow_runs" edges to the WorkflowRun entity.
+func (_u *GroveUpdate) ClearWorkflowRuns() *GroveUpdate {
+	_u.mutation.ClearWorkflowRuns()
+	return _u
+}
+
+// RemoveWorkflowRunIDs removes the "workflow_runs" edge to WorkflowRun entities by IDs.
+func (_u *GroveUpdate) RemoveWorkflowRunIDs(ids ...uuid.UUID) *GroveUpdate {
+	_u.mutation.RemoveWorkflowRunIDs(ids...)
+	return _u
+}
+
+// RemoveWorkflowRuns removes "workflow_runs" edges to WorkflowRun entities.
+func (_u *GroveUpdate) RemoveWorkflowRuns(v ...*WorkflowRun) *GroveUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveWorkflowRunIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -346,6 +383,51 @@ func (_u *GroveUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(agent.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.WorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedWorkflowRunsIDs(); len(nodes) > 0 && !_u.mutation.WorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -520,6 +602,21 @@ func (_u *GroveUpdateOne) AddAgents(v ...*Agent) *GroveUpdateOne {
 	return _u.AddAgentIDs(ids...)
 }
 
+// AddWorkflowRunIDs adds the "workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_u *GroveUpdateOne) AddWorkflowRunIDs(ids ...uuid.UUID) *GroveUpdateOne {
+	_u.mutation.AddWorkflowRunIDs(ids...)
+	return _u
+}
+
+// AddWorkflowRuns adds the "workflow_runs" edges to the WorkflowRun entity.
+func (_u *GroveUpdateOne) AddWorkflowRuns(v ...*WorkflowRun) *GroveUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddWorkflowRunIDs(ids...)
+}
+
 // Mutation returns the GroveMutation object of the builder.
 func (_u *GroveUpdateOne) Mutation() *GroveMutation {
 	return _u.mutation
@@ -544,6 +641,27 @@ func (_u *GroveUpdateOne) RemoveAgents(v ...*Agent) *GroveUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAgentIDs(ids...)
+}
+
+// ClearWorkflowRuns clears all "workflow_runs" edges to the WorkflowRun entity.
+func (_u *GroveUpdateOne) ClearWorkflowRuns() *GroveUpdateOne {
+	_u.mutation.ClearWorkflowRuns()
+	return _u
+}
+
+// RemoveWorkflowRunIDs removes the "workflow_runs" edge to WorkflowRun entities by IDs.
+func (_u *GroveUpdateOne) RemoveWorkflowRunIDs(ids ...uuid.UUID) *GroveUpdateOne {
+	_u.mutation.RemoveWorkflowRunIDs(ids...)
+	return _u
+}
+
+// RemoveWorkflowRuns removes "workflow_runs" edges to WorkflowRun entities.
+func (_u *GroveUpdateOne) RemoveWorkflowRuns(v ...*WorkflowRun) *GroveUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveWorkflowRunIDs(ids...)
 }
 
 // Where appends a list predicates to the GroveUpdate builder.
@@ -719,6 +837,51 @@ func (_u *GroveUpdateOne) sqlSave(ctx context.Context) (_node *Grove, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(agent.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.WorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedWorkflowRunsIDs(); len(nodes) > 0 && !_u.mutation.WorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   grove.WorkflowRunsTable,
+			Columns: []string{grove.WorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

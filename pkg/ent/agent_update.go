@@ -17,6 +17,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/policybinding"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/predicate"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -242,6 +243,21 @@ func (_u *AgentUpdate) AddPolicyBindings(v ...*PolicyBinding) *AgentUpdate {
 	return _u.AddPolicyBindingIDs(ids...)
 }
 
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_u *AgentUpdate) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) *AgentUpdate {
+	_u.mutation.AddCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// AddCreatedWorkflowRuns adds the "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *AgentUpdate) AddCreatedWorkflowRuns(v ...*WorkflowRun) *AgentUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddCreatedWorkflowRunIDs(ids...)
+}
+
 // Mutation returns the AgentMutation object of the builder.
 func (_u *AgentUpdate) Mutation() *AgentMutation {
 	return _u.mutation
@@ -305,6 +321,27 @@ func (_u *AgentUpdate) RemovePolicyBindings(v ...*PolicyBinding) *AgentUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePolicyBindingIDs(ids...)
+}
+
+// ClearCreatedWorkflowRuns clears all "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *AgentUpdate) ClearCreatedWorkflowRuns() *AgentUpdate {
+	_u.mutation.ClearCreatedWorkflowRuns()
+	return _u
+}
+
+// RemoveCreatedWorkflowRunIDs removes the "created_workflow_runs" edge to WorkflowRun entities by IDs.
+func (_u *AgentUpdate) RemoveCreatedWorkflowRunIDs(ids ...uuid.UUID) *AgentUpdate {
+	_u.mutation.RemoveCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// RemoveCreatedWorkflowRuns removes "created_workflow_runs" edges to WorkflowRun entities.
+func (_u *AgentUpdate) RemoveCreatedWorkflowRuns(v ...*WorkflowRun) *AgentUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveCreatedWorkflowRunIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -579,6 +616,51 @@ func (_u *AgentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   agent.CreatedWorkflowRunsTable,
+			Columns: []string{agent.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedCreatedWorkflowRunsIDs(); len(nodes) > 0 && !_u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   agent.CreatedWorkflowRunsTable,
+			Columns: []string{agent.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatedWorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   agent.CreatedWorkflowRunsTable,
+			Columns: []string{agent.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{agent.Label}
@@ -808,6 +890,21 @@ func (_u *AgentUpdateOne) AddPolicyBindings(v ...*PolicyBinding) *AgentUpdateOne
 	return _u.AddPolicyBindingIDs(ids...)
 }
 
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (_u *AgentUpdateOne) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) *AgentUpdateOne {
+	_u.mutation.AddCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// AddCreatedWorkflowRuns adds the "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *AgentUpdateOne) AddCreatedWorkflowRuns(v ...*WorkflowRun) *AgentUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddCreatedWorkflowRunIDs(ids...)
+}
+
 // Mutation returns the AgentMutation object of the builder.
 func (_u *AgentUpdateOne) Mutation() *AgentMutation {
 	return _u.mutation
@@ -871,6 +968,27 @@ func (_u *AgentUpdateOne) RemovePolicyBindings(v ...*PolicyBinding) *AgentUpdate
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePolicyBindingIDs(ids...)
+}
+
+// ClearCreatedWorkflowRuns clears all "created_workflow_runs" edges to the WorkflowRun entity.
+func (_u *AgentUpdateOne) ClearCreatedWorkflowRuns() *AgentUpdateOne {
+	_u.mutation.ClearCreatedWorkflowRuns()
+	return _u
+}
+
+// RemoveCreatedWorkflowRunIDs removes the "created_workflow_runs" edge to WorkflowRun entities by IDs.
+func (_u *AgentUpdateOne) RemoveCreatedWorkflowRunIDs(ids ...uuid.UUID) *AgentUpdateOne {
+	_u.mutation.RemoveCreatedWorkflowRunIDs(ids...)
+	return _u
+}
+
+// RemoveCreatedWorkflowRuns removes "created_workflow_runs" edges to WorkflowRun entities.
+func (_u *AgentUpdateOne) RemoveCreatedWorkflowRuns(v ...*WorkflowRun) *AgentUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveCreatedWorkflowRunIDs(ids...)
 }
 
 // Where appends a list predicates to the AgentUpdate builder.
@@ -1168,6 +1286,51 @@ func (_u *AgentUpdateOne) sqlSave(ctx context.Context) (_node *Agent, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(policybinding.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   agent.CreatedWorkflowRunsTable,
+			Columns: []string{agent.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedCreatedWorkflowRunsIDs(); len(nodes) > 0 && !_u.mutation.CreatedWorkflowRunsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   agent.CreatedWorkflowRunsTable,
+			Columns: []string{agent.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.CreatedWorkflowRunsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   agent.CreatedWorkflowRunsTable,
+			Columns: []string{agent.CreatedWorkflowRunsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

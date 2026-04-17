@@ -20,6 +20,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/predicate"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/schema"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 	"github.com/google/uuid"
 )
 
@@ -39,6 +40,7 @@ const (
 	TypeGrove           = "Grove"
 	TypePolicyBinding   = "PolicyBinding"
 	TypeUser            = "User"
+	TypeWorkflowRun     = "WorkflowRun"
 )
 
 // AccessPolicyMutation represents an operation that mutates the AccessPolicy nodes in the graph.
@@ -1433,33 +1435,36 @@ func (m *AccessPolicyMutation) ResetEdge(name string) error {
 // AgentMutation represents an operation that mutates the Agent nodes in the graph.
 type AgentMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *uuid.UUID
-	slug                   *string
-	name                   *string
-	template               *string
-	status                 *agent.Status
-	delegation_enabled     *bool
-	visibility             *string
-	created                *time.Time
-	updated                *time.Time
-	clearedFields          map[string]struct{}
-	grove                  *uuid.UUID
-	clearedgrove           bool
-	creator                *uuid.UUID
-	clearedcreator         bool
-	owner                  *uuid.UUID
-	clearedowner           bool
-	memberships            map[uuid.UUID]struct{}
-	removedmemberships     map[uuid.UUID]struct{}
-	clearedmemberships     bool
-	policy_bindings        map[uuid.UUID]struct{}
-	removedpolicy_bindings map[uuid.UUID]struct{}
-	clearedpolicy_bindings bool
-	done                   bool
-	oldValue               func(context.Context) (*Agent, error)
-	predicates             []predicate.Agent
+	op                           Op
+	typ                          string
+	id                           *uuid.UUID
+	slug                         *string
+	name                         *string
+	template                     *string
+	status                       *agent.Status
+	delegation_enabled           *bool
+	visibility                   *string
+	created                      *time.Time
+	updated                      *time.Time
+	clearedFields                map[string]struct{}
+	grove                        *uuid.UUID
+	clearedgrove                 bool
+	creator                      *uuid.UUID
+	clearedcreator               bool
+	owner                        *uuid.UUID
+	clearedowner                 bool
+	memberships                  map[uuid.UUID]struct{}
+	removedmemberships           map[uuid.UUID]struct{}
+	clearedmemberships           bool
+	policy_bindings              map[uuid.UUID]struct{}
+	removedpolicy_bindings       map[uuid.UUID]struct{}
+	clearedpolicy_bindings       bool
+	created_workflow_runs        map[uuid.UUID]struct{}
+	removedcreated_workflow_runs map[uuid.UUID]struct{}
+	clearedcreated_workflow_runs bool
+	done                         bool
+	oldValue                     func(context.Context) (*Agent, error)
+	predicates                   []predicate.Agent
 }
 
 var _ ent.Mutation = (*AgentMutation)(nil)
@@ -2203,6 +2208,60 @@ func (m *AgentMutation) ResetPolicyBindings() {
 	m.removedpolicy_bindings = nil
 }
 
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by ids.
+func (m *AgentMutation) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) {
+	if m.created_workflow_runs == nil {
+		m.created_workflow_runs = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.created_workflow_runs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearCreatedWorkflowRuns clears the "created_workflow_runs" edge to the WorkflowRun entity.
+func (m *AgentMutation) ClearCreatedWorkflowRuns() {
+	m.clearedcreated_workflow_runs = true
+}
+
+// CreatedWorkflowRunsCleared reports if the "created_workflow_runs" edge to the WorkflowRun entity was cleared.
+func (m *AgentMutation) CreatedWorkflowRunsCleared() bool {
+	return m.clearedcreated_workflow_runs
+}
+
+// RemoveCreatedWorkflowRunIDs removes the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (m *AgentMutation) RemoveCreatedWorkflowRunIDs(ids ...uuid.UUID) {
+	if m.removedcreated_workflow_runs == nil {
+		m.removedcreated_workflow_runs = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.created_workflow_runs, ids[i])
+		m.removedcreated_workflow_runs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedCreatedWorkflowRuns returns the removed IDs of the "created_workflow_runs" edge to the WorkflowRun entity.
+func (m *AgentMutation) RemovedCreatedWorkflowRunsIDs() (ids []uuid.UUID) {
+	for id := range m.removedcreated_workflow_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// CreatedWorkflowRunsIDs returns the "created_workflow_runs" edge IDs in the mutation.
+func (m *AgentMutation) CreatedWorkflowRunsIDs() (ids []uuid.UUID) {
+	for id := range m.created_workflow_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetCreatedWorkflowRuns resets all changes to the "created_workflow_runs" edge.
+func (m *AgentMutation) ResetCreatedWorkflowRuns() {
+	m.created_workflow_runs = nil
+	m.clearedcreated_workflow_runs = false
+	m.removedcreated_workflow_runs = nil
+}
+
 // Where appends a list predicates to the AgentMutation builder.
 func (m *AgentMutation) Where(ps ...predicate.Agent) {
 	m.predicates = append(m.predicates, ps...)
@@ -2527,7 +2586,7 @@ func (m *AgentMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AgentMutation) AddedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.grove != nil {
 		edges = append(edges, agent.EdgeGrove)
 	}
@@ -2542,6 +2601,9 @@ func (m *AgentMutation) AddedEdges() []string {
 	}
 	if m.policy_bindings != nil {
 		edges = append(edges, agent.EdgePolicyBindings)
+	}
+	if m.created_workflow_runs != nil {
+		edges = append(edges, agent.EdgeCreatedWorkflowRuns)
 	}
 	return edges
 }
@@ -2574,18 +2636,27 @@ func (m *AgentMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case agent.EdgeCreatedWorkflowRuns:
+		ids := make([]ent.Value, 0, len(m.created_workflow_runs))
+		for id := range m.created_workflow_runs {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AgentMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.removedmemberships != nil {
 		edges = append(edges, agent.EdgeMemberships)
 	}
 	if m.removedpolicy_bindings != nil {
 		edges = append(edges, agent.EdgePolicyBindings)
+	}
+	if m.removedcreated_workflow_runs != nil {
+		edges = append(edges, agent.EdgeCreatedWorkflowRuns)
 	}
 	return edges
 }
@@ -2606,13 +2677,19 @@ func (m *AgentMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case agent.EdgeCreatedWorkflowRuns:
+		ids := make([]ent.Value, 0, len(m.removedcreated_workflow_runs))
+		for id := range m.removedcreated_workflow_runs {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AgentMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.clearedgrove {
 		edges = append(edges, agent.EdgeGrove)
 	}
@@ -2627,6 +2704,9 @@ func (m *AgentMutation) ClearedEdges() []string {
 	}
 	if m.clearedpolicy_bindings {
 		edges = append(edges, agent.EdgePolicyBindings)
+	}
+	if m.clearedcreated_workflow_runs {
+		edges = append(edges, agent.EdgeCreatedWorkflowRuns)
 	}
 	return edges
 }
@@ -2645,6 +2725,8 @@ func (m *AgentMutation) EdgeCleared(name string) bool {
 		return m.clearedmemberships
 	case agent.EdgePolicyBindings:
 		return m.clearedpolicy_bindings
+	case agent.EdgeCreatedWorkflowRuns:
+		return m.clearedcreated_workflow_runs
 	}
 	return false
 }
@@ -2684,6 +2766,9 @@ func (m *AgentMutation) ResetEdge(name string) error {
 		return nil
 	case agent.EdgePolicyBindings:
 		m.ResetPolicyBindings()
+		return nil
+	case agent.EdgeCreatedWorkflowRuns:
+		m.ResetCreatedWorkflowRuns()
 		return nil
 	}
 	return fmt.Errorf("unknown Agent edge %s", name)
@@ -4877,26 +4962,29 @@ func (m *GroupMembershipMutation) ResetEdge(name string) error {
 // GroveMutation represents an operation that mutates the Grove nodes in the graph.
 type GroveMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *uuid.UUID
-	name          *string
-	slug          *string
-	git_remote    *string
-	labels        *map[string]string
-	annotations   *map[string]string
-	created       *time.Time
-	updated       *time.Time
-	created_by    *string
-	owner_id      *string
-	visibility    *string
-	clearedFields map[string]struct{}
-	agents        map[uuid.UUID]struct{}
-	removedagents map[uuid.UUID]struct{}
-	clearedagents bool
-	done          bool
-	oldValue      func(context.Context) (*Grove, error)
-	predicates    []predicate.Grove
+	op                   Op
+	typ                  string
+	id                   *uuid.UUID
+	name                 *string
+	slug                 *string
+	git_remote           *string
+	labels               *map[string]string
+	annotations          *map[string]string
+	created              *time.Time
+	updated              *time.Time
+	created_by           *string
+	owner_id             *string
+	visibility           *string
+	clearedFields        map[string]struct{}
+	agents               map[uuid.UUID]struct{}
+	removedagents        map[uuid.UUID]struct{}
+	clearedagents        bool
+	workflow_runs        map[uuid.UUID]struct{}
+	removedworkflow_runs map[uuid.UUID]struct{}
+	clearedworkflow_runs bool
+	done                 bool
+	oldValue             func(context.Context) (*Grove, error)
+	predicates           []predicate.Grove
 }
 
 var _ ent.Mutation = (*GroveMutation)(nil)
@@ -5482,6 +5570,60 @@ func (m *GroveMutation) ResetAgents() {
 	m.removedagents = nil
 }
 
+// AddWorkflowRunIDs adds the "workflow_runs" edge to the WorkflowRun entity by ids.
+func (m *GroveMutation) AddWorkflowRunIDs(ids ...uuid.UUID) {
+	if m.workflow_runs == nil {
+		m.workflow_runs = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.workflow_runs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearWorkflowRuns clears the "workflow_runs" edge to the WorkflowRun entity.
+func (m *GroveMutation) ClearWorkflowRuns() {
+	m.clearedworkflow_runs = true
+}
+
+// WorkflowRunsCleared reports if the "workflow_runs" edge to the WorkflowRun entity was cleared.
+func (m *GroveMutation) WorkflowRunsCleared() bool {
+	return m.clearedworkflow_runs
+}
+
+// RemoveWorkflowRunIDs removes the "workflow_runs" edge to the WorkflowRun entity by IDs.
+func (m *GroveMutation) RemoveWorkflowRunIDs(ids ...uuid.UUID) {
+	if m.removedworkflow_runs == nil {
+		m.removedworkflow_runs = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.workflow_runs, ids[i])
+		m.removedworkflow_runs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedWorkflowRuns returns the removed IDs of the "workflow_runs" edge to the WorkflowRun entity.
+func (m *GroveMutation) RemovedWorkflowRunsIDs() (ids []uuid.UUID) {
+	for id := range m.removedworkflow_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// WorkflowRunsIDs returns the "workflow_runs" edge IDs in the mutation.
+func (m *GroveMutation) WorkflowRunsIDs() (ids []uuid.UUID) {
+	for id := range m.workflow_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetWorkflowRuns resets all changes to the "workflow_runs" edge.
+func (m *GroveMutation) ResetWorkflowRuns() {
+	m.workflow_runs = nil
+	m.clearedworkflow_runs = false
+	m.removedworkflow_runs = nil
+}
+
 // Where appends a list predicates to the GroveMutation builder.
 func (m *GroveMutation) Where(ps ...predicate.Grove) {
 	m.predicates = append(m.predicates, ps...)
@@ -5801,9 +5943,12 @@ func (m *GroveMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GroveMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.agents != nil {
 		edges = append(edges, grove.EdgeAgents)
+	}
+	if m.workflow_runs != nil {
+		edges = append(edges, grove.EdgeWorkflowRuns)
 	}
 	return edges
 }
@@ -5818,15 +5963,24 @@ func (m *GroveMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case grove.EdgeWorkflowRuns:
+		ids := make([]ent.Value, 0, len(m.workflow_runs))
+		for id := range m.workflow_runs {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GroveMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.removedagents != nil {
 		edges = append(edges, grove.EdgeAgents)
+	}
+	if m.removedworkflow_runs != nil {
+		edges = append(edges, grove.EdgeWorkflowRuns)
 	}
 	return edges
 }
@@ -5841,15 +5995,24 @@ func (m *GroveMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case grove.EdgeWorkflowRuns:
+		ids := make([]ent.Value, 0, len(m.removedworkflow_runs))
+		for id := range m.removedworkflow_runs {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GroveMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedagents {
 		edges = append(edges, grove.EdgeAgents)
+	}
+	if m.clearedworkflow_runs {
+		edges = append(edges, grove.EdgeWorkflowRuns)
 	}
 	return edges
 }
@@ -5860,6 +6023,8 @@ func (m *GroveMutation) EdgeCleared(name string) bool {
 	switch name {
 	case grove.EdgeAgents:
 		return m.clearedagents
+	case grove.EdgeWorkflowRuns:
+		return m.clearedworkflow_runs
 	}
 	return false
 }
@@ -5878,6 +6043,9 @@ func (m *GroveMutation) ResetEdge(name string) error {
 	switch name {
 	case grove.EdgeAgents:
 		m.ResetAgents()
+		return nil
+	case grove.EdgeWorkflowRuns:
+		m.ResetWorkflowRuns()
 		return nil
 	}
 	return fmt.Errorf("unknown Grove edge %s", name)
@@ -6832,36 +7000,39 @@ func (m *PolicyBindingMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *uuid.UUID
-	email                  *string
-	display_name           *string
-	avatar_url             *string
-	role                   *user.Role
-	status                 *user.Status
-	preferences            **schema.UserPreferences
-	created                *time.Time
-	last_login             *time.Time
-	clearedFields          map[string]struct{}
-	created_agents         map[uuid.UUID]struct{}
-	removedcreated_agents  map[uuid.UUID]struct{}
-	clearedcreated_agents  bool
-	owned_agents           map[uuid.UUID]struct{}
-	removedowned_agents    map[uuid.UUID]struct{}
-	clearedowned_agents    bool
-	owned_groups           map[uuid.UUID]struct{}
-	removedowned_groups    map[uuid.UUID]struct{}
-	clearedowned_groups    bool
-	memberships            map[uuid.UUID]struct{}
-	removedmemberships     map[uuid.UUID]struct{}
-	clearedmemberships     bool
-	policy_bindings        map[uuid.UUID]struct{}
-	removedpolicy_bindings map[uuid.UUID]struct{}
-	clearedpolicy_bindings bool
-	done                   bool
-	oldValue               func(context.Context) (*User, error)
-	predicates             []predicate.User
+	op                           Op
+	typ                          string
+	id                           *uuid.UUID
+	email                        *string
+	display_name                 *string
+	avatar_url                   *string
+	role                         *user.Role
+	status                       *user.Status
+	preferences                  **schema.UserPreferences
+	created                      *time.Time
+	last_login                   *time.Time
+	clearedFields                map[string]struct{}
+	created_agents               map[uuid.UUID]struct{}
+	removedcreated_agents        map[uuid.UUID]struct{}
+	clearedcreated_agents        bool
+	owned_agents                 map[uuid.UUID]struct{}
+	removedowned_agents          map[uuid.UUID]struct{}
+	clearedowned_agents          bool
+	owned_groups                 map[uuid.UUID]struct{}
+	removedowned_groups          map[uuid.UUID]struct{}
+	clearedowned_groups          bool
+	created_workflow_runs        map[uuid.UUID]struct{}
+	removedcreated_workflow_runs map[uuid.UUID]struct{}
+	clearedcreated_workflow_runs bool
+	memberships                  map[uuid.UUID]struct{}
+	removedmemberships           map[uuid.UUID]struct{}
+	clearedmemberships           bool
+	policy_bindings              map[uuid.UUID]struct{}
+	removedpolicy_bindings       map[uuid.UUID]struct{}
+	clearedpolicy_bindings       bool
+	done                         bool
+	oldValue                     func(context.Context) (*User, error)
+	predicates                   []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -7457,6 +7628,60 @@ func (m *UserMutation) ResetOwnedGroups() {
 	m.removedowned_groups = nil
 }
 
+// AddCreatedWorkflowRunIDs adds the "created_workflow_runs" edge to the WorkflowRun entity by ids.
+func (m *UserMutation) AddCreatedWorkflowRunIDs(ids ...uuid.UUID) {
+	if m.created_workflow_runs == nil {
+		m.created_workflow_runs = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.created_workflow_runs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearCreatedWorkflowRuns clears the "created_workflow_runs" edge to the WorkflowRun entity.
+func (m *UserMutation) ClearCreatedWorkflowRuns() {
+	m.clearedcreated_workflow_runs = true
+}
+
+// CreatedWorkflowRunsCleared reports if the "created_workflow_runs" edge to the WorkflowRun entity was cleared.
+func (m *UserMutation) CreatedWorkflowRunsCleared() bool {
+	return m.clearedcreated_workflow_runs
+}
+
+// RemoveCreatedWorkflowRunIDs removes the "created_workflow_runs" edge to the WorkflowRun entity by IDs.
+func (m *UserMutation) RemoveCreatedWorkflowRunIDs(ids ...uuid.UUID) {
+	if m.removedcreated_workflow_runs == nil {
+		m.removedcreated_workflow_runs = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.created_workflow_runs, ids[i])
+		m.removedcreated_workflow_runs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedCreatedWorkflowRuns returns the removed IDs of the "created_workflow_runs" edge to the WorkflowRun entity.
+func (m *UserMutation) RemovedCreatedWorkflowRunsIDs() (ids []uuid.UUID) {
+	for id := range m.removedcreated_workflow_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// CreatedWorkflowRunsIDs returns the "created_workflow_runs" edge IDs in the mutation.
+func (m *UserMutation) CreatedWorkflowRunsIDs() (ids []uuid.UUID) {
+	for id := range m.created_workflow_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetCreatedWorkflowRuns resets all changes to the "created_workflow_runs" edge.
+func (m *UserMutation) ResetCreatedWorkflowRuns() {
+	m.created_workflow_runs = nil
+	m.clearedcreated_workflow_runs = false
+	m.removedcreated_workflow_runs = nil
+}
+
 // AddMembershipIDs adds the "memberships" edge to the GroupMembership entity by ids.
 func (m *UserMutation) AddMembershipIDs(ids ...uuid.UUID) {
 	if m.memberships == nil {
@@ -7838,7 +8063,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.created_agents != nil {
 		edges = append(edges, user.EdgeCreatedAgents)
 	}
@@ -7847,6 +8072,9 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.owned_groups != nil {
 		edges = append(edges, user.EdgeOwnedGroups)
+	}
+	if m.created_workflow_runs != nil {
+		edges = append(edges, user.EdgeCreatedWorkflowRuns)
 	}
 	if m.memberships != nil {
 		edges = append(edges, user.EdgeMemberships)
@@ -7879,6 +8107,12 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeCreatedWorkflowRuns:
+		ids := make([]ent.Value, 0, len(m.created_workflow_runs))
+		for id := range m.created_workflow_runs {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeMemberships:
 		ids := make([]ent.Value, 0, len(m.memberships))
 		for id := range m.memberships {
@@ -7897,7 +8131,7 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.removedcreated_agents != nil {
 		edges = append(edges, user.EdgeCreatedAgents)
 	}
@@ -7906,6 +8140,9 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedowned_groups != nil {
 		edges = append(edges, user.EdgeOwnedGroups)
+	}
+	if m.removedcreated_workflow_runs != nil {
+		edges = append(edges, user.EdgeCreatedWorkflowRuns)
 	}
 	if m.removedmemberships != nil {
 		edges = append(edges, user.EdgeMemberships)
@@ -7938,6 +8175,12 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeCreatedWorkflowRuns:
+		ids := make([]ent.Value, 0, len(m.removedcreated_workflow_runs))
+		for id := range m.removedcreated_workflow_runs {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeMemberships:
 		ids := make([]ent.Value, 0, len(m.removedmemberships))
 		for id := range m.removedmemberships {
@@ -7956,7 +8199,7 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.clearedcreated_agents {
 		edges = append(edges, user.EdgeCreatedAgents)
 	}
@@ -7965,6 +8208,9 @@ func (m *UserMutation) ClearedEdges() []string {
 	}
 	if m.clearedowned_groups {
 		edges = append(edges, user.EdgeOwnedGroups)
+	}
+	if m.clearedcreated_workflow_runs {
+		edges = append(edges, user.EdgeCreatedWorkflowRuns)
 	}
 	if m.clearedmemberships {
 		edges = append(edges, user.EdgeMemberships)
@@ -7985,6 +8231,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedowned_agents
 	case user.EdgeOwnedGroups:
 		return m.clearedowned_groups
+	case user.EdgeCreatedWorkflowRuns:
+		return m.clearedcreated_workflow_runs
 	case user.EdgeMemberships:
 		return m.clearedmemberships
 	case user.EdgePolicyBindings:
@@ -8014,6 +8262,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 	case user.EdgeOwnedGroups:
 		m.ResetOwnedGroups()
 		return nil
+	case user.EdgeCreatedWorkflowRuns:
+		m.ResetCreatedWorkflowRuns()
+		return nil
 	case user.EdgeMemberships:
 		m.ResetMemberships()
 		return nil
@@ -8022,4 +8273,1358 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)
+}
+
+// WorkflowRunMutation represents an operation that mutates the WorkflowRun nodes in the graph.
+type WorkflowRunMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *uuid.UUID
+	broker_id               *string
+	source_yaml             *string
+	inputs_json             *[]byte
+	status                  *workflowrun.Status
+	result_json             *[]byte
+	error_message           *string
+	trace_url               *string
+	started_at              *time.Time
+	finished_at             *time.Time
+	created                 *time.Time
+	updated                 *time.Time
+	clearedFields           map[string]struct{}
+	grove                   *uuid.UUID
+	clearedgrove            bool
+	created_by_user         *uuid.UUID
+	clearedcreated_by_user  bool
+	created_by_agent        *uuid.UUID
+	clearedcreated_by_agent bool
+	done                    bool
+	oldValue                func(context.Context) (*WorkflowRun, error)
+	predicates              []predicate.WorkflowRun
+}
+
+var _ ent.Mutation = (*WorkflowRunMutation)(nil)
+
+// workflowrunOption allows management of the mutation configuration using functional options.
+type workflowrunOption func(*WorkflowRunMutation)
+
+// newWorkflowRunMutation creates new mutation for the WorkflowRun entity.
+func newWorkflowRunMutation(c config, op Op, opts ...workflowrunOption) *WorkflowRunMutation {
+	m := &WorkflowRunMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeWorkflowRun,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withWorkflowRunID sets the ID field of the mutation.
+func withWorkflowRunID(id uuid.UUID) workflowrunOption {
+	return func(m *WorkflowRunMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *WorkflowRun
+		)
+		m.oldValue = func(ctx context.Context) (*WorkflowRun, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().WorkflowRun.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withWorkflowRun sets the old WorkflowRun of the mutation.
+func withWorkflowRun(node *WorkflowRun) workflowrunOption {
+	return func(m *WorkflowRunMutation) {
+		m.oldValue = func(context.Context) (*WorkflowRun, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m WorkflowRunMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m WorkflowRunMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of WorkflowRun entities.
+func (m *WorkflowRunMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *WorkflowRunMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *WorkflowRunMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().WorkflowRun.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetGroveID sets the "grove_id" field.
+func (m *WorkflowRunMutation) SetGroveID(u uuid.UUID) {
+	m.grove = &u
+}
+
+// GroveID returns the value of the "grove_id" field in the mutation.
+func (m *WorkflowRunMutation) GroveID() (r uuid.UUID, exists bool) {
+	v := m.grove
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroveID returns the old "grove_id" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldGroveID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroveID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroveID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroveID: %w", err)
+	}
+	return oldValue.GroveID, nil
+}
+
+// ResetGroveID resets all changes to the "grove_id" field.
+func (m *WorkflowRunMutation) ResetGroveID() {
+	m.grove = nil
+}
+
+// SetBrokerID sets the "broker_id" field.
+func (m *WorkflowRunMutation) SetBrokerID(s string) {
+	m.broker_id = &s
+}
+
+// BrokerID returns the value of the "broker_id" field in the mutation.
+func (m *WorkflowRunMutation) BrokerID() (r string, exists bool) {
+	v := m.broker_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBrokerID returns the old "broker_id" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldBrokerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBrokerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBrokerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBrokerID: %w", err)
+	}
+	return oldValue.BrokerID, nil
+}
+
+// ClearBrokerID clears the value of the "broker_id" field.
+func (m *WorkflowRunMutation) ClearBrokerID() {
+	m.broker_id = nil
+	m.clearedFields[workflowrun.FieldBrokerID] = struct{}{}
+}
+
+// BrokerIDCleared returns if the "broker_id" field was cleared in this mutation.
+func (m *WorkflowRunMutation) BrokerIDCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldBrokerID]
+	return ok
+}
+
+// ResetBrokerID resets all changes to the "broker_id" field.
+func (m *WorkflowRunMutation) ResetBrokerID() {
+	m.broker_id = nil
+	delete(m.clearedFields, workflowrun.FieldBrokerID)
+}
+
+// SetSourceYaml sets the "source_yaml" field.
+func (m *WorkflowRunMutation) SetSourceYaml(s string) {
+	m.source_yaml = &s
+}
+
+// SourceYaml returns the value of the "source_yaml" field in the mutation.
+func (m *WorkflowRunMutation) SourceYaml() (r string, exists bool) {
+	v := m.source_yaml
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceYaml returns the old "source_yaml" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldSourceYaml(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceYaml is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceYaml requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceYaml: %w", err)
+	}
+	return oldValue.SourceYaml, nil
+}
+
+// ResetSourceYaml resets all changes to the "source_yaml" field.
+func (m *WorkflowRunMutation) ResetSourceYaml() {
+	m.source_yaml = nil
+}
+
+// SetInputsJSON sets the "inputs_json" field.
+func (m *WorkflowRunMutation) SetInputsJSON(b []byte) {
+	m.inputs_json = &b
+}
+
+// InputsJSON returns the value of the "inputs_json" field in the mutation.
+func (m *WorkflowRunMutation) InputsJSON() (r []byte, exists bool) {
+	v := m.inputs_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputsJSON returns the old "inputs_json" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldInputsJSON(ctx context.Context) (v *[]byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputsJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputsJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputsJSON: %w", err)
+	}
+	return oldValue.InputsJSON, nil
+}
+
+// ClearInputsJSON clears the value of the "inputs_json" field.
+func (m *WorkflowRunMutation) ClearInputsJSON() {
+	m.inputs_json = nil
+	m.clearedFields[workflowrun.FieldInputsJSON] = struct{}{}
+}
+
+// InputsJSONCleared returns if the "inputs_json" field was cleared in this mutation.
+func (m *WorkflowRunMutation) InputsJSONCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldInputsJSON]
+	return ok
+}
+
+// ResetInputsJSON resets all changes to the "inputs_json" field.
+func (m *WorkflowRunMutation) ResetInputsJSON() {
+	m.inputs_json = nil
+	delete(m.clearedFields, workflowrun.FieldInputsJSON)
+}
+
+// SetStatus sets the "status" field.
+func (m *WorkflowRunMutation) SetStatus(w workflowrun.Status) {
+	m.status = &w
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *WorkflowRunMutation) Status() (r workflowrun.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldStatus(ctx context.Context) (v workflowrun.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *WorkflowRunMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetResultJSON sets the "result_json" field.
+func (m *WorkflowRunMutation) SetResultJSON(b []byte) {
+	m.result_json = &b
+}
+
+// ResultJSON returns the value of the "result_json" field in the mutation.
+func (m *WorkflowRunMutation) ResultJSON() (r []byte, exists bool) {
+	v := m.result_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultJSON returns the old "result_json" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldResultJSON(ctx context.Context) (v *[]byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultJSON: %w", err)
+	}
+	return oldValue.ResultJSON, nil
+}
+
+// ClearResultJSON clears the value of the "result_json" field.
+func (m *WorkflowRunMutation) ClearResultJSON() {
+	m.result_json = nil
+	m.clearedFields[workflowrun.FieldResultJSON] = struct{}{}
+}
+
+// ResultJSONCleared returns if the "result_json" field was cleared in this mutation.
+func (m *WorkflowRunMutation) ResultJSONCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldResultJSON]
+	return ok
+}
+
+// ResetResultJSON resets all changes to the "result_json" field.
+func (m *WorkflowRunMutation) ResetResultJSON() {
+	m.result_json = nil
+	delete(m.clearedFields, workflowrun.FieldResultJSON)
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *WorkflowRunMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *WorkflowRunMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *WorkflowRunMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[workflowrun.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *WorkflowRunMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *WorkflowRunMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, workflowrun.FieldErrorMessage)
+}
+
+// SetTraceURL sets the "trace_url" field.
+func (m *WorkflowRunMutation) SetTraceURL(s string) {
+	m.trace_url = &s
+}
+
+// TraceURL returns the value of the "trace_url" field in the mutation.
+func (m *WorkflowRunMutation) TraceURL() (r string, exists bool) {
+	v := m.trace_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTraceURL returns the old "trace_url" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldTraceURL(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTraceURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTraceURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTraceURL: %w", err)
+	}
+	return oldValue.TraceURL, nil
+}
+
+// ClearTraceURL clears the value of the "trace_url" field.
+func (m *WorkflowRunMutation) ClearTraceURL() {
+	m.trace_url = nil
+	m.clearedFields[workflowrun.FieldTraceURL] = struct{}{}
+}
+
+// TraceURLCleared returns if the "trace_url" field was cleared in this mutation.
+func (m *WorkflowRunMutation) TraceURLCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldTraceURL]
+	return ok
+}
+
+// ResetTraceURL resets all changes to the "trace_url" field.
+func (m *WorkflowRunMutation) ResetTraceURL() {
+	m.trace_url = nil
+	delete(m.clearedFields, workflowrun.FieldTraceURL)
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *WorkflowRunMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *WorkflowRunMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *WorkflowRunMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[workflowrun.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *WorkflowRunMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *WorkflowRunMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, workflowrun.FieldStartedAt)
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (m *WorkflowRunMutation) SetFinishedAt(t time.Time) {
+	m.finished_at = &t
+}
+
+// FinishedAt returns the value of the "finished_at" field in the mutation.
+func (m *WorkflowRunMutation) FinishedAt() (r time.Time, exists bool) {
+	v := m.finished_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinishedAt returns the old "finished_at" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldFinishedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinishedAt: %w", err)
+	}
+	return oldValue.FinishedAt, nil
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (m *WorkflowRunMutation) ClearFinishedAt() {
+	m.finished_at = nil
+	m.clearedFields[workflowrun.FieldFinishedAt] = struct{}{}
+}
+
+// FinishedAtCleared returns if the "finished_at" field was cleared in this mutation.
+func (m *WorkflowRunMutation) FinishedAtCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldFinishedAt]
+	return ok
+}
+
+// ResetFinishedAt resets all changes to the "finished_at" field.
+func (m *WorkflowRunMutation) ResetFinishedAt() {
+	m.finished_at = nil
+	delete(m.clearedFields, workflowrun.FieldFinishedAt)
+}
+
+// SetCreatedByUserID sets the "created_by_user_id" field.
+func (m *WorkflowRunMutation) SetCreatedByUserID(u uuid.UUID) {
+	m.created_by_user = &u
+}
+
+// CreatedByUserID returns the value of the "created_by_user_id" field in the mutation.
+func (m *WorkflowRunMutation) CreatedByUserID() (r uuid.UUID, exists bool) {
+	v := m.created_by_user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedByUserID returns the old "created_by_user_id" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldCreatedByUserID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedByUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedByUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedByUserID: %w", err)
+	}
+	return oldValue.CreatedByUserID, nil
+}
+
+// ClearCreatedByUserID clears the value of the "created_by_user_id" field.
+func (m *WorkflowRunMutation) ClearCreatedByUserID() {
+	m.created_by_user = nil
+	m.clearedFields[workflowrun.FieldCreatedByUserID] = struct{}{}
+}
+
+// CreatedByUserIDCleared returns if the "created_by_user_id" field was cleared in this mutation.
+func (m *WorkflowRunMutation) CreatedByUserIDCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldCreatedByUserID]
+	return ok
+}
+
+// ResetCreatedByUserID resets all changes to the "created_by_user_id" field.
+func (m *WorkflowRunMutation) ResetCreatedByUserID() {
+	m.created_by_user = nil
+	delete(m.clearedFields, workflowrun.FieldCreatedByUserID)
+}
+
+// SetCreatedByAgentID sets the "created_by_agent_id" field.
+func (m *WorkflowRunMutation) SetCreatedByAgentID(u uuid.UUID) {
+	m.created_by_agent = &u
+}
+
+// CreatedByAgentID returns the value of the "created_by_agent_id" field in the mutation.
+func (m *WorkflowRunMutation) CreatedByAgentID() (r uuid.UUID, exists bool) {
+	v := m.created_by_agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedByAgentID returns the old "created_by_agent_id" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldCreatedByAgentID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedByAgentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedByAgentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedByAgentID: %w", err)
+	}
+	return oldValue.CreatedByAgentID, nil
+}
+
+// ClearCreatedByAgentID clears the value of the "created_by_agent_id" field.
+func (m *WorkflowRunMutation) ClearCreatedByAgentID() {
+	m.created_by_agent = nil
+	m.clearedFields[workflowrun.FieldCreatedByAgentID] = struct{}{}
+}
+
+// CreatedByAgentIDCleared returns if the "created_by_agent_id" field was cleared in this mutation.
+func (m *WorkflowRunMutation) CreatedByAgentIDCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldCreatedByAgentID]
+	return ok
+}
+
+// ResetCreatedByAgentID resets all changes to the "created_by_agent_id" field.
+func (m *WorkflowRunMutation) ResetCreatedByAgentID() {
+	m.created_by_agent = nil
+	delete(m.clearedFields, workflowrun.FieldCreatedByAgentID)
+}
+
+// SetCreated sets the "created" field.
+func (m *WorkflowRunMutation) SetCreated(t time.Time) {
+	m.created = &t
+}
+
+// Created returns the value of the "created" field in the mutation.
+func (m *WorkflowRunMutation) Created() (r time.Time, exists bool) {
+	v := m.created
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreated returns the old "created" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldCreated(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreated: %w", err)
+	}
+	return oldValue.Created, nil
+}
+
+// ResetCreated resets all changes to the "created" field.
+func (m *WorkflowRunMutation) ResetCreated() {
+	m.created = nil
+}
+
+// SetUpdated sets the "updated" field.
+func (m *WorkflowRunMutation) SetUpdated(t time.Time) {
+	m.updated = &t
+}
+
+// Updated returns the value of the "updated" field in the mutation.
+func (m *WorkflowRunMutation) Updated() (r time.Time, exists bool) {
+	v := m.updated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdated returns the old "updated" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldUpdated(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdated: %w", err)
+	}
+	return oldValue.Updated, nil
+}
+
+// ResetUpdated resets all changes to the "updated" field.
+func (m *WorkflowRunMutation) ResetUpdated() {
+	m.updated = nil
+}
+
+// ClearGrove clears the "grove" edge to the Grove entity.
+func (m *WorkflowRunMutation) ClearGrove() {
+	m.clearedgrove = true
+	m.clearedFields[workflowrun.FieldGroveID] = struct{}{}
+}
+
+// GroveCleared reports if the "grove" edge to the Grove entity was cleared.
+func (m *WorkflowRunMutation) GroveCleared() bool {
+	return m.clearedgrove
+}
+
+// GroveIDs returns the "grove" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroveID instead. It exists only for internal usage by the builders.
+func (m *WorkflowRunMutation) GroveIDs() (ids []uuid.UUID) {
+	if id := m.grove; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGrove resets all changes to the "grove" edge.
+func (m *WorkflowRunMutation) ResetGrove() {
+	m.grove = nil
+	m.clearedgrove = false
+}
+
+// ClearCreatedByUser clears the "created_by_user" edge to the User entity.
+func (m *WorkflowRunMutation) ClearCreatedByUser() {
+	m.clearedcreated_by_user = true
+	m.clearedFields[workflowrun.FieldCreatedByUserID] = struct{}{}
+}
+
+// CreatedByUserCleared reports if the "created_by_user" edge to the User entity was cleared.
+func (m *WorkflowRunMutation) CreatedByUserCleared() bool {
+	return m.CreatedByUserIDCleared() || m.clearedcreated_by_user
+}
+
+// CreatedByUserIDs returns the "created_by_user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// CreatedByUserID instead. It exists only for internal usage by the builders.
+func (m *WorkflowRunMutation) CreatedByUserIDs() (ids []uuid.UUID) {
+	if id := m.created_by_user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetCreatedByUser resets all changes to the "created_by_user" edge.
+func (m *WorkflowRunMutation) ResetCreatedByUser() {
+	m.created_by_user = nil
+	m.clearedcreated_by_user = false
+}
+
+// ClearCreatedByAgent clears the "created_by_agent" edge to the Agent entity.
+func (m *WorkflowRunMutation) ClearCreatedByAgent() {
+	m.clearedcreated_by_agent = true
+	m.clearedFields[workflowrun.FieldCreatedByAgentID] = struct{}{}
+}
+
+// CreatedByAgentCleared reports if the "created_by_agent" edge to the Agent entity was cleared.
+func (m *WorkflowRunMutation) CreatedByAgentCleared() bool {
+	return m.CreatedByAgentIDCleared() || m.clearedcreated_by_agent
+}
+
+// CreatedByAgentIDs returns the "created_by_agent" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// CreatedByAgentID instead. It exists only for internal usage by the builders.
+func (m *WorkflowRunMutation) CreatedByAgentIDs() (ids []uuid.UUID) {
+	if id := m.created_by_agent; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetCreatedByAgent resets all changes to the "created_by_agent" edge.
+func (m *WorkflowRunMutation) ResetCreatedByAgent() {
+	m.created_by_agent = nil
+	m.clearedcreated_by_agent = false
+}
+
+// Where appends a list predicates to the WorkflowRunMutation builder.
+func (m *WorkflowRunMutation) Where(ps ...predicate.WorkflowRun) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the WorkflowRunMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *WorkflowRunMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.WorkflowRun, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *WorkflowRunMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *WorkflowRunMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (WorkflowRun).
+func (m *WorkflowRunMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *WorkflowRunMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.grove != nil {
+		fields = append(fields, workflowrun.FieldGroveID)
+	}
+	if m.broker_id != nil {
+		fields = append(fields, workflowrun.FieldBrokerID)
+	}
+	if m.source_yaml != nil {
+		fields = append(fields, workflowrun.FieldSourceYaml)
+	}
+	if m.inputs_json != nil {
+		fields = append(fields, workflowrun.FieldInputsJSON)
+	}
+	if m.status != nil {
+		fields = append(fields, workflowrun.FieldStatus)
+	}
+	if m.result_json != nil {
+		fields = append(fields, workflowrun.FieldResultJSON)
+	}
+	if m.error_message != nil {
+		fields = append(fields, workflowrun.FieldErrorMessage)
+	}
+	if m.trace_url != nil {
+		fields = append(fields, workflowrun.FieldTraceURL)
+	}
+	if m.started_at != nil {
+		fields = append(fields, workflowrun.FieldStartedAt)
+	}
+	if m.finished_at != nil {
+		fields = append(fields, workflowrun.FieldFinishedAt)
+	}
+	if m.created_by_user != nil {
+		fields = append(fields, workflowrun.FieldCreatedByUserID)
+	}
+	if m.created_by_agent != nil {
+		fields = append(fields, workflowrun.FieldCreatedByAgentID)
+	}
+	if m.created != nil {
+		fields = append(fields, workflowrun.FieldCreated)
+	}
+	if m.updated != nil {
+		fields = append(fields, workflowrun.FieldUpdated)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *WorkflowRunMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case workflowrun.FieldGroveID:
+		return m.GroveID()
+	case workflowrun.FieldBrokerID:
+		return m.BrokerID()
+	case workflowrun.FieldSourceYaml:
+		return m.SourceYaml()
+	case workflowrun.FieldInputsJSON:
+		return m.InputsJSON()
+	case workflowrun.FieldStatus:
+		return m.Status()
+	case workflowrun.FieldResultJSON:
+		return m.ResultJSON()
+	case workflowrun.FieldErrorMessage:
+		return m.ErrorMessage()
+	case workflowrun.FieldTraceURL:
+		return m.TraceURL()
+	case workflowrun.FieldStartedAt:
+		return m.StartedAt()
+	case workflowrun.FieldFinishedAt:
+		return m.FinishedAt()
+	case workflowrun.FieldCreatedByUserID:
+		return m.CreatedByUserID()
+	case workflowrun.FieldCreatedByAgentID:
+		return m.CreatedByAgentID()
+	case workflowrun.FieldCreated:
+		return m.Created()
+	case workflowrun.FieldUpdated:
+		return m.Updated()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *WorkflowRunMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case workflowrun.FieldGroveID:
+		return m.OldGroveID(ctx)
+	case workflowrun.FieldBrokerID:
+		return m.OldBrokerID(ctx)
+	case workflowrun.FieldSourceYaml:
+		return m.OldSourceYaml(ctx)
+	case workflowrun.FieldInputsJSON:
+		return m.OldInputsJSON(ctx)
+	case workflowrun.FieldStatus:
+		return m.OldStatus(ctx)
+	case workflowrun.FieldResultJSON:
+		return m.OldResultJSON(ctx)
+	case workflowrun.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	case workflowrun.FieldTraceURL:
+		return m.OldTraceURL(ctx)
+	case workflowrun.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case workflowrun.FieldFinishedAt:
+		return m.OldFinishedAt(ctx)
+	case workflowrun.FieldCreatedByUserID:
+		return m.OldCreatedByUserID(ctx)
+	case workflowrun.FieldCreatedByAgentID:
+		return m.OldCreatedByAgentID(ctx)
+	case workflowrun.FieldCreated:
+		return m.OldCreated(ctx)
+	case workflowrun.FieldUpdated:
+		return m.OldUpdated(ctx)
+	}
+	return nil, fmt.Errorf("unknown WorkflowRun field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkflowRunMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case workflowrun.FieldGroveID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroveID(v)
+		return nil
+	case workflowrun.FieldBrokerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBrokerID(v)
+		return nil
+	case workflowrun.FieldSourceYaml:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceYaml(v)
+		return nil
+	case workflowrun.FieldInputsJSON:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputsJSON(v)
+		return nil
+	case workflowrun.FieldStatus:
+		v, ok := value.(workflowrun.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case workflowrun.FieldResultJSON:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultJSON(v)
+		return nil
+	case workflowrun.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	case workflowrun.FieldTraceURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTraceURL(v)
+		return nil
+	case workflowrun.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case workflowrun.FieldFinishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinishedAt(v)
+		return nil
+	case workflowrun.FieldCreatedByUserID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedByUserID(v)
+		return nil
+	case workflowrun.FieldCreatedByAgentID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedByAgentID(v)
+		return nil
+	case workflowrun.FieldCreated:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreated(v)
+		return nil
+	case workflowrun.FieldUpdated:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdated(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowRun field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *WorkflowRunMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *WorkflowRunMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkflowRunMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown WorkflowRun numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *WorkflowRunMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(workflowrun.FieldBrokerID) {
+		fields = append(fields, workflowrun.FieldBrokerID)
+	}
+	if m.FieldCleared(workflowrun.FieldInputsJSON) {
+		fields = append(fields, workflowrun.FieldInputsJSON)
+	}
+	if m.FieldCleared(workflowrun.FieldResultJSON) {
+		fields = append(fields, workflowrun.FieldResultJSON)
+	}
+	if m.FieldCleared(workflowrun.FieldErrorMessage) {
+		fields = append(fields, workflowrun.FieldErrorMessage)
+	}
+	if m.FieldCleared(workflowrun.FieldTraceURL) {
+		fields = append(fields, workflowrun.FieldTraceURL)
+	}
+	if m.FieldCleared(workflowrun.FieldStartedAt) {
+		fields = append(fields, workflowrun.FieldStartedAt)
+	}
+	if m.FieldCleared(workflowrun.FieldFinishedAt) {
+		fields = append(fields, workflowrun.FieldFinishedAt)
+	}
+	if m.FieldCleared(workflowrun.FieldCreatedByUserID) {
+		fields = append(fields, workflowrun.FieldCreatedByUserID)
+	}
+	if m.FieldCleared(workflowrun.FieldCreatedByAgentID) {
+		fields = append(fields, workflowrun.FieldCreatedByAgentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *WorkflowRunMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *WorkflowRunMutation) ClearField(name string) error {
+	switch name {
+	case workflowrun.FieldBrokerID:
+		m.ClearBrokerID()
+		return nil
+	case workflowrun.FieldInputsJSON:
+		m.ClearInputsJSON()
+		return nil
+	case workflowrun.FieldResultJSON:
+		m.ClearResultJSON()
+		return nil
+	case workflowrun.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	case workflowrun.FieldTraceURL:
+		m.ClearTraceURL()
+		return nil
+	case workflowrun.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case workflowrun.FieldFinishedAt:
+		m.ClearFinishedAt()
+		return nil
+	case workflowrun.FieldCreatedByUserID:
+		m.ClearCreatedByUserID()
+		return nil
+	case workflowrun.FieldCreatedByAgentID:
+		m.ClearCreatedByAgentID()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowRun nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *WorkflowRunMutation) ResetField(name string) error {
+	switch name {
+	case workflowrun.FieldGroveID:
+		m.ResetGroveID()
+		return nil
+	case workflowrun.FieldBrokerID:
+		m.ResetBrokerID()
+		return nil
+	case workflowrun.FieldSourceYaml:
+		m.ResetSourceYaml()
+		return nil
+	case workflowrun.FieldInputsJSON:
+		m.ResetInputsJSON()
+		return nil
+	case workflowrun.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case workflowrun.FieldResultJSON:
+		m.ResetResultJSON()
+		return nil
+	case workflowrun.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	case workflowrun.FieldTraceURL:
+		m.ResetTraceURL()
+		return nil
+	case workflowrun.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case workflowrun.FieldFinishedAt:
+		m.ResetFinishedAt()
+		return nil
+	case workflowrun.FieldCreatedByUserID:
+		m.ResetCreatedByUserID()
+		return nil
+	case workflowrun.FieldCreatedByAgentID:
+		m.ResetCreatedByAgentID()
+		return nil
+	case workflowrun.FieldCreated:
+		m.ResetCreated()
+		return nil
+	case workflowrun.FieldUpdated:
+		m.ResetUpdated()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowRun field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *WorkflowRunMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.grove != nil {
+		edges = append(edges, workflowrun.EdgeGrove)
+	}
+	if m.created_by_user != nil {
+		edges = append(edges, workflowrun.EdgeCreatedByUser)
+	}
+	if m.created_by_agent != nil {
+		edges = append(edges, workflowrun.EdgeCreatedByAgent)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *WorkflowRunMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case workflowrun.EdgeGrove:
+		if id := m.grove; id != nil {
+			return []ent.Value{*id}
+		}
+	case workflowrun.EdgeCreatedByUser:
+		if id := m.created_by_user; id != nil {
+			return []ent.Value{*id}
+		}
+	case workflowrun.EdgeCreatedByAgent:
+		if id := m.created_by_agent; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *WorkflowRunMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *WorkflowRunMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *WorkflowRunMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedgrove {
+		edges = append(edges, workflowrun.EdgeGrove)
+	}
+	if m.clearedcreated_by_user {
+		edges = append(edges, workflowrun.EdgeCreatedByUser)
+	}
+	if m.clearedcreated_by_agent {
+		edges = append(edges, workflowrun.EdgeCreatedByAgent)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *WorkflowRunMutation) EdgeCleared(name string) bool {
+	switch name {
+	case workflowrun.EdgeGrove:
+		return m.clearedgrove
+	case workflowrun.EdgeCreatedByUser:
+		return m.clearedcreated_by_user
+	case workflowrun.EdgeCreatedByAgent:
+		return m.clearedcreated_by_agent
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *WorkflowRunMutation) ClearEdge(name string) error {
+	switch name {
+	case workflowrun.EdgeGrove:
+		m.ClearGrove()
+		return nil
+	case workflowrun.EdgeCreatedByUser:
+		m.ClearCreatedByUser()
+		return nil
+	case workflowrun.EdgeCreatedByAgent:
+		m.ClearCreatedByAgent()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowRun unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *WorkflowRunMutation) ResetEdge(name string) error {
+	switch name {
+	case workflowrun.EdgeGrove:
+		m.ResetGrove()
+		return nil
+	case workflowrun.EdgeCreatedByUser:
+		m.ResetCreatedByUser()
+		return nil
+	case workflowrun.EdgeCreatedByAgent:
+		m.ResetCreatedByAgent()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowRun edge %s", name)
 }

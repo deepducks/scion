@@ -19,6 +19,7 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/grove"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/policybinding"
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/user"
+	"github.com/GoogleCloudPlatform/scion/pkg/ent/workflowrun"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -86,6 +87,7 @@ func checkColumn(t, c string) error {
 			grove.Table:           grove.ValidColumn,
 			policybinding.Table:   policybinding.ValidColumn,
 			user.Table:            user.ValidColumn,
+			workflowrun.Table:     workflowrun.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
