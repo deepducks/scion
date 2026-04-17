@@ -383,34 +383,53 @@ func buildCommonRunArgs(config RunConfig) ([]string, error) {
 	var harnessArgs []string
 	if config.Harness != nil {
 		harnessArgs = config.Harness.GetCommand(config.Task, config.Resume, config.CommandArgs)
-	} else {
-		return nil, fmt.Errorf("no harness provided")
-	}
 
-	// Build tmux-wrapped command
-	var quotedArgs []string
-	for _, a := range harnessArgs {
-		if strings.ContainsAny(a, " \t\n\"'$") {
-			quotedArgs = append(quotedArgs, fmt.Sprintf("%q", a))
-		} else {
-			quotedArgs = append(quotedArgs, a)
+		// Build tmux-wrapped command for interactive harness containers.
+		var quotedArgs []string
+		for _, a := range harnessArgs {
+			if strings.ContainsAny(a, " \t\n\"'$") {
+				quotedArgs = append(quotedArgs, fmt.Sprintf("%q", a))
+			} else {
+				quotedArgs = append(quotedArgs, a)
+			}
 		}
-	}
-	cmdLine := strings.Join(quotedArgs, " ")
+		cmdLine := strings.Join(quotedArgs, " ")
 
-	// Build tmux command: create session with "agent" window running the harness,
-	// then add a "shell" window and switch back to the agent window.
-	tmuxCmd := fmt.Sprintf(
-		"tmux new-session -d -s scion -n agent %s \\; set-option -g window-size latest \\; new-window -t scion -n shell \\; select-window -t scion:agent \\; attach-session -t scion",
-		cmdLine,
-	)
+		// Build tmux command: create session with "agent" window running the harness,
+		// then add a "shell" window and switch back to the agent window.
+		tmuxCmd := fmt.Sprintf(
+			"tmux new-session -d -s scion -n agent %s \\; set-option -g window-size latest \\; new-window -t scion -n shell \\; select-window -t scion:agent \\; attach-session -t scion",
+			cmdLine,
+		)
 
-	if len(fuseMounts) > 0 {
-		mountCmds := strings.Join(fuseMounts, " && ")
-		wrapped := fmt.Sprintf("%s && exec sh -c %q", mountCmds, tmuxCmd)
-		args = append(args, "sh", "-c", wrapped)
+		if len(fuseMounts) > 0 {
+			mountCmds := strings.Join(fuseMounts, " && ")
+			wrapped := fmt.Sprintf("%s && exec sh -c %q", mountCmds, tmuxCmd)
+			args = append(args, "sh", "-c", wrapped)
+		} else {
+			args = append(args, "sh", "-c", tmuxCmd)
+		}
+	} else if len(config.CommandArgs) > 0 {
+		// Thin/ephemeral containers (e.g. workflow runners): no Harness, no tmux.
+		// CommandArgs is used directly as the container entrypoint/cmd.
+		if len(fuseMounts) > 0 {
+			mountCmds := strings.Join(fuseMounts, " && ")
+			// Quote the command arguments for the sh -c wrapper.
+			var quotedArgs []string
+			for _, a := range config.CommandArgs {
+				if strings.ContainsAny(a, " \t\n\"'$") {
+					quotedArgs = append(quotedArgs, fmt.Sprintf("%q", a))
+				} else {
+					quotedArgs = append(quotedArgs, a)
+				}
+			}
+			wrapped := fmt.Sprintf("%s && exec %s", mountCmds, strings.Join(quotedArgs, " "))
+			args = append(args, "sh", "-c", wrapped)
+		} else {
+			args = append(args, config.CommandArgs...)
+		}
 	} else {
-		args = append(args, "sh", "-c", tmuxCmd)
+		return nil, fmt.Errorf("no harness provided and no CommandArgs set")
 	}
 
 	return args, nil

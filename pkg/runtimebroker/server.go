@@ -134,6 +134,11 @@ type ServerConfig struct {
 	// StateDir is the directory for broker runtime state (pending env-gather,
 	// dispatch attempts). Defaults to ~/.scion/runtime-broker-state/<broker-id>.
 	StateDir string
+
+	// DefaultAgentImage is the container image used for ephemeral workflow-run
+	// containers. It must include quack in /usr/local/bin or equivalent PATH
+	// location. Defaults to "scion-agent:latest" if empty.
+	DefaultAgentImage string
 }
 
 // DefaultServerConfig returns the default server configuration.
@@ -298,9 +303,17 @@ func New(cfg ServerConfig, mgr agent.Manager, rt scionrt.Runtime) *Server {
 		}
 	}
 
+	// Resolve the default agent image for workflow-run containers.
+	workflowImage := cfg.DefaultAgentImage
+	if workflowImage == "" {
+		workflowImage = "scion-agent:latest"
+	}
+
 	// Initialize workflow executor.
 	srv.workflowExecutor = NewWorkflowExecutor(
 		cfg.BrokerID,
+		rt,
+		workflowImage,
 		srv.getControlChannelByName,
 		logging.Subsystem("broker.workflow-executor"),
 	)
