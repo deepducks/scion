@@ -23,7 +23,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import type { PageData, Agent, Grove } from '../../shared/types.js';
+import type { PageData, Agent, Grove, Capabilities } from '../../shared/types.js';
 import { isAgentRunning } from '../../shared/types.js';
 import '../shared/status-badge.js';
 import { stateManager } from '../../client/state.js';
@@ -49,14 +49,19 @@ export class ScionPageHome extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     stateManager.setScope({ type: 'dashboard' });
-    
-    this.agents = stateManager.getAgents();
-    this.groves = stateManager.getGroves();
 
+    // Subscribe before snapshot so no deltas are missed between read and listen
     stateManager.addEventListener('agents-updated', this.boundOnAgentsUpdated as EventListener);
     stateManager.addEventListener('groves-updated', this.boundOnGrovesUpdated as EventListener);
 
-    void this.loadData();
+    // Use hydrated data if available, avoiding unnecessary fetches on SSR load
+    // or when navigating back from a page that already populated the state.
+    this.agents = stateManager.getAgents();
+    this.groves = stateManager.getGroves();
+
+    if (this.agents.length === 0 && this.groves.length === 0) {
+      void this.loadData();
+    }
   }
 
   override disconnectedCallback(): void {
@@ -87,14 +92,16 @@ export class ScionPageHome extends LitElement {
       if (!this.isConnected || stateManager.currentScope?.type !== 'dashboard') return;
 
       if (agentsResp.ok) {
-        const data = await agentsResp.json();
+        const data = (await agentsResp.json()) as { agents?: Agent[]; _capabilities?: Capabilities } | Agent[];
+        if (!this.isConnected || stateManager.currentScope?.type !== 'dashboard') return;
         const agents = Array.isArray(data) ? data : data.agents || [];
         this.agents = agents;
         stateManager.seedAgents(agents);
       }
 
       if (grovesResp.ok) {
-        const data = await grovesResp.json();
+        const data = (await grovesResp.json()) as { groves?: Grove[]; _capabilities?: Capabilities } | Grove[];
+        if (!this.isConnected || stateManager.currentScope?.type !== 'dashboard') return;
         const groves = Array.isArray(data) ? data : data.groves || [];
         this.groves = groves;
         stateManager.seedGroves(groves);
