@@ -2069,6 +2069,10 @@ func (s *Server) registerRoutes() {
 	// GitHub App webhook and setup callback (unauthenticated — uses webhook signature)
 	s.mux.HandleFunc("/api/v1/webhooks/github", s.handleGitHubWebhook)
 	s.mux.HandleFunc("/github-app/setup", s.handleGitHubAppSetup)
+
+	// WorkflowRun routes: individual run operations (get, cancel, logs).
+	// Grove-scoped create/list are handled inside handleGroveRoutes.
+	s.mux.HandleFunc("/api/v1/workflows/runs/", s.handleWorkflowRunRoutes)
 }
 
 // applyMiddleware wraps the handler with middleware.

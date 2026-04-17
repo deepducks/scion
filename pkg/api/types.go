@@ -644,3 +644,65 @@ func (g *GroveInfo) GroveID() string {
 	}
 	return g.Name
 }
+
+// ============================================================================
+// WorkflowRun API types (Phase 3b)
+// ============================================================================
+
+// WorkflowRunCreatedBy carries the creator of a workflow run.
+type WorkflowRunCreatedBy struct {
+	UserID  *string `json:"userId,omitempty"`
+	AgentID *string `json:"agentId,omitempty"`
+}
+
+// WorkflowRunSummary is the condensed representation returned in list and create
+// responses. Heavy fields (source, inputs, result) are omitted; fetch via
+// GET /api/v1/workflows/runs/{runId}?include=source,inputs,result.
+type WorkflowRunSummary struct {
+	ID         string               `json:"id"`
+	GroveID    string               `json:"groveId"`
+	BrokerID   *string              `json:"brokerId,omitempty"`
+	Status     string               `json:"status"`
+	TraceURL   *string              `json:"traceUrl,omitempty"`
+	StartedAt  *time.Time           `json:"startedAt,omitempty"`
+	FinishedAt *time.Time           `json:"finishedAt,omitempty"`
+	CreatedAt  time.Time            `json:"createdAt"`
+	CreatedBy  WorkflowRunCreatedBy `json:"createdBy"`
+}
+
+// WorkflowRunDetail is the full representation returned by GET /runs/{runId}.
+// The heavy fields (Source, Inputs, Result) are populated only when the
+// corresponding include= query parameter is present.
+type WorkflowRunDetail struct {
+	WorkflowRunSummary
+
+	// Heavy fields — populated with include=source,inputs,result.
+	Source *string `json:"source,omitempty"`
+	Inputs *string `json:"inputs,omitempty"`
+	Result *string `json:"result,omitempty"`
+	Error  *string `json:"error,omitempty"`
+}
+
+// WorkflowRunCreateRequest is the request body for POST /api/v1/workflows/runs.
+type WorkflowRunCreateRequest struct {
+	GroveID    string `json:"groveId"`
+	SourceYAML string `json:"sourceYaml"`
+	Inputs     string `json:"inputs,omitempty"` // arbitrary JSON
+}
+
+// WorkflowRunListResponse is the response for GET /api/v1/workflows/runs.
+type WorkflowRunListResponse struct {
+	Runs       []WorkflowRunSummary `json:"runs"`
+	NextCursor string               `json:"nextCursor,omitempty"`
+	TotalCount int                  `json:"totalCount,omitempty"`
+}
+
+// WorkflowRunResponse wraps a single run for create/cancel responses.
+type WorkflowRunResponse struct {
+	Run WorkflowRunSummary `json:"run"`
+}
+
+// WorkflowRunDetailResponse wraps a detail run for get responses.
+type WorkflowRunDetailResponse struct {
+	Run WorkflowRunDetail `json:"run"`
+}

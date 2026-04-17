@@ -23,24 +23,26 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/store"
 )
 
-// CompositeStore wraps an existing store.Store and overrides group and policy
-// operations with Ent-backed implementations.
+// CompositeStore wraps an existing store.Store and overrides group, policy,
+// and workflow run operations with Ent-backed implementations.
 type CompositeStore struct {
 	store.Store
-	groups   *GroupStore
-	policies *PolicyStore
-	client   *ent.Client
+	groups       *GroupStore
+	policies     *PolicyStore
+	workflowRuns *WorkflowRunStore
+	client       *ent.Client
 }
 
-// NewCompositeStore creates a CompositeStore that delegates group and policy
-// operations to Ent-backed stores while forwarding all other operations to the
-// underlying store.
+// NewCompositeStore creates a CompositeStore that delegates group, policy, and
+// workflow run operations to Ent-backed stores while forwarding all other
+// operations to the underlying store.
 func NewCompositeStore(base store.Store, client *ent.Client) *CompositeStore {
 	return &CompositeStore{
-		Store:    base,
-		groups:   NewGroupStore(client),
-		policies: NewPolicyStore(client),
-		client:   client,
+		Store:        base,
+		groups:       NewGroupStore(client),
+		policies:     NewPolicyStore(client),
+		workflowRuns: NewWorkflowRunStore(client),
+		client:       client,
 	}
 }
 
@@ -319,4 +321,36 @@ func (c *CompositeStore) GetPoliciesForPrincipal(ctx context.Context, principalT
 
 func (c *CompositeStore) GetPoliciesForPrincipals(ctx context.Context, principals []store.PrincipalRef) ([]store.Policy, error) {
 	return c.policies.GetPoliciesForPrincipals(ctx, principals)
+}
+
+// WorkflowRunStore method overrides — delegate to Ent-backed WorkflowRunStore.
+
+func (c *CompositeStore) CreateWorkflowRun(ctx context.Context, run *store.WorkflowRun) error {
+	// Ensure the grove shadow record exists in the Ent database before creating
+	// the workflow run (which has a required FK to the grove).
+	if run.GroveID != "" {
+		if err := c.ensureEntGrove(ctx, run.GroveID); err != nil {
+			return err
+		}
+	}
+	// Ensure the user shadow record exists in the Ent database.
+	if run.CreatedByUserID != nil {
+		if err := c.ensureEntUser(ctx, *run.CreatedByUserID); err != nil {
+			// Non-fatal: log and continue; user FK is optional on the run.
+			_ = err
+		}
+	}
+	return c.workflowRuns.CreateWorkflowRun(ctx, run)
+}
+
+func (c *CompositeStore) GetWorkflowRun(ctx context.Context, id string) (*store.WorkflowRun, error) {
+	return c.workflowRuns.GetWorkflowRun(ctx, id)
+}
+
+func (c *CompositeStore) ListWorkflowRuns(ctx context.Context, opts store.WorkflowRunListOptions) (*store.ListResult[store.WorkflowRun], error) {
+	return c.workflowRuns.ListWorkflowRuns(ctx, opts)
+}
+
+func (c *CompositeStore) CancelWorkflowRun(ctx context.Context, id string) (*store.WorkflowRun, error) {
+	return c.workflowRuns.CancelWorkflowRun(ctx, id)
 }

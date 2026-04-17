@@ -87,6 +87,24 @@ type Client interface {
 
 	// Health checks API availability.
 	Health(ctx context.Context) (*HealthResponse, error)
+
+	// CreateWorkflowRun creates a new workflow run.
+	CreateWorkflowRun(ctx context.Context, req *CreateWorkflowRunRequest) (*WorkflowRun, error)
+
+	// ListWorkflowRuns returns workflow runs in a grove.
+	// Returns (items, nextCursor, error).
+	ListWorkflowRuns(ctx context.Context, groveID string, opts *ListWorkflowRunsOptions) ([]WorkflowRun, string, error)
+
+	// GetWorkflowRun retrieves a workflow run by ID.
+	// Pass include fields to expand heavy payload (source, inputs, result).
+	GetWorkflowRun(ctx context.Context, runID string, include ...string) (*WorkflowRunDetail, error)
+
+	// CancelWorkflowRun requests cancellation of a workflow run.
+	CancelWorkflowRun(ctx context.Context, runID string) (*WorkflowRun, error)
+
+	// StreamWorkflowRunLogs opens a WebSocket to the run's log stream.
+	// The returned channel is closed when the server closes the connection.
+	StreamWorkflowRunLogs(ctx context.Context, runID string) (<-chan LogEvent, error)
 }
 
 // client is the concrete implementation of Client.

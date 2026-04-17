@@ -102,6 +102,9 @@ type Store interface {
 
 	// Grove Sync State operations (Workspace Sync Metadata)
 	GroveSyncStateStore
+
+	// WorkflowRun operations (duckflux workflow execution records)
+	WorkflowRunStore
 }
 
 // AgentStore defines agent-related persistence operations.
@@ -1056,4 +1059,26 @@ type GroveSyncStateStore interface {
 	// DeleteGroveSyncState removes sync state for a grove and optional broker.
 	// Returns ErrNotFound if the state doesn't exist.
 	DeleteGroveSyncState(ctx context.Context, groveID, brokerID string) error
+}
+
+// WorkflowRunStore defines persistence operations for duckflux workflow runs.
+type WorkflowRunStore interface {
+	// CreateWorkflowRun persists a new workflow run.
+	// The run is created with status "queued".
+	CreateWorkflowRun(ctx context.Context, run *WorkflowRun) error
+
+	// GetWorkflowRun retrieves a workflow run by ID.
+	// Returns ErrNotFound if the run does not exist.
+	GetWorkflowRun(ctx context.Context, id string) (*WorkflowRun, error)
+
+	// ListWorkflowRuns returns workflow runs matching the filter.
+	// Pagination uses an opaque cursor; an empty cursor starts from the beginning.
+	ListWorkflowRuns(ctx context.Context, opts WorkflowRunListOptions) (*ListResult[WorkflowRun], error)
+
+	// CancelWorkflowRun atomically sets the run status to "canceled" only if
+	// the current status is one of queued/provisioning/running.
+	// Returns the updated run.
+	// Returns ErrNotFound if the run does not exist.
+	// Returns ErrVersionConflict if the run is already in a terminal state.
+	CancelWorkflowRun(ctx context.Context, id string) (*WorkflowRun, error)
 }

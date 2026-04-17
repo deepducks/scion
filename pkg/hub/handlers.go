@@ -4014,6 +4014,14 @@ func (s *Server) handleGroveRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for nested /workflows/runs path
+	if strings.HasPrefix(subPath, "workflows/runs") {
+		runSubPath := strings.TrimPrefix(subPath, "workflows/runs")
+		runSubPath = strings.TrimPrefix(runSubPath, "/")
+		s.handleGroveWorkflowRuns(w, r, groveID, runSubPath)
+		return
+	}
+
 	// Check for nested /scheduled-events path
 	if strings.HasPrefix(subPath, "scheduled-events") {
 		eventPath := strings.TrimPrefix(subPath, "scheduled-events")

@@ -117,6 +117,21 @@ func (m *mockHubClient) Messages() hubclient.MessageService { return nil }
 func (m *mockHubClient) Health(ctx context.Context) (*hubclient.HealthResponse, error) {
 	return nil, nil
 }
+func (m *mockHubClient) CreateWorkflowRun(ctx context.Context, req *hubclient.CreateWorkflowRunRequest) (*hubclient.WorkflowRun, error) {
+	return nil, nil
+}
+func (m *mockHubClient) ListWorkflowRuns(ctx context.Context, groveID string, opts *hubclient.ListWorkflowRunsOptions) ([]hubclient.WorkflowRun, string, error) {
+	return nil, "", nil
+}
+func (m *mockHubClient) GetWorkflowRun(ctx context.Context, runID string, include ...string) (*hubclient.WorkflowRunDetail, error) {
+	return nil, nil
+}
+func (m *mockHubClient) CancelWorkflowRun(ctx context.Context, runID string) (*hubclient.WorkflowRun, error) {
+	return nil, nil
+}
+func (m *mockHubClient) StreamWorkflowRunLogs(ctx context.Context, runID string) (<-chan hubclient.LogEvent, error) {
+	return nil, nil
+}
 
 func TestHydrateSuccess(t *testing.T) {
 	tmpDir := t.TempDir()

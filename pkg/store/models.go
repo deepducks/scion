@@ -1328,3 +1328,46 @@ type GroveSyncState struct {
 	FileCount     int        `json:"fileCount"`
 	TotalBytes    int64      `json:"totalBytes"`
 }
+
+// WorkflowRun represents a single invocation of a duckflux workflow.
+type WorkflowRun struct {
+	ID               string     `json:"id"`
+	GroveID          string     `json:"groveId"`
+	BrokerID         *string    `json:"brokerId,omitempty"`
+	SourceYaml       string     `json:"sourceYaml,omitempty"`
+	InputsJSON       string     `json:"inputsJson,omitempty"`
+	Status           string     `json:"status"`
+	ResultJSON       *string    `json:"resultJson,omitempty"`
+	ErrorMessage     *string    `json:"errorMessage,omitempty"`
+	TraceURL         *string    `json:"traceUrl,omitempty"`
+	StartedAt        *time.Time `json:"startedAt,omitempty"`
+	FinishedAt       *time.Time `json:"finishedAt,omitempty"`
+	CreatedByUserID  *string    `json:"createdByUserId,omitempty"`
+	CreatedByAgentID *string    `json:"createdByAgentId,omitempty"`
+	Created          time.Time  `json:"created"`
+	Updated          time.Time  `json:"updated"`
+}
+
+// WorkflowRun status constants.
+const (
+	WorkflowRunStatusQueued       = "queued"
+	WorkflowRunStatusProvisioning = "provisioning"
+	WorkflowRunStatusRunning      = "running"
+	WorkflowRunStatusSucceeded    = "succeeded"
+	WorkflowRunStatusFailed       = "failed"
+	WorkflowRunStatusCanceled     = "canceled"
+	WorkflowRunStatusTimedOut     = "timed_out"
+)
+
+// WorkflowRunFilter defines criteria for filtering workflow runs.
+type WorkflowRunFilter struct {
+	GroveID string
+	Status  string // single status filter; empty = all
+}
+
+// WorkflowRunListOptions combines filter and pagination.
+type WorkflowRunListOptions struct {
+	Filter WorkflowRunFilter
+	Limit  int
+	Cursor string
+}
