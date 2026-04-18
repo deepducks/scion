@@ -891,6 +891,24 @@ func (s *Server) Handler() http.Handler {
 	return s.applyMiddleware(s.mux)
 }
 
+// RawHandler returns the HTTP handler without broker auth middleware.
+// Used for control channel tunneled requests, which are pre-authenticated
+// at the WebSocket connection level (the broker authenticates to the Hub
+// via HMAC when establishing the control channel). Applying per-request
+// HMAC auth inside the tunnel is redundant and causes dispatch failures.
+func (s *Server) RawHandler() http.Handler {
+	h := s.recoveryMiddleware(s.mux)
+	if s.requestLogger != nil {
+		h = logging.RequestLogMiddleware(s.requestLogger, "broker", logging.BrokerPathPatterns())(h)
+	} else {
+		h = s.loggingMiddleware(h)
+	}
+	if s.config.CORSEnabled {
+		h = s.corsMiddleware(h)
+	}
+	return h
+}
+
 // getAuxiliaryManagers returns the managers for all registered auxiliary runtimes.
 func (s *Server) getAuxiliaryManagers() []agent.Manager {
 	s.auxiliaryRuntimesMu.RLock()

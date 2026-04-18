@@ -60,7 +60,7 @@ runtimes:
 # Profiles combine runtime with optional overrides
 profiles:
   local:
-    runtime: container  # Auto-adjusted by OS
+    runtime: local  # Auto-detected by OS
     # harness_overrides:
     #   gemini:
     #     image: custom-image:tag

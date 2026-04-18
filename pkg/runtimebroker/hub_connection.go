@@ -142,7 +142,7 @@ func (hc *HubConnection) Start(ctx context.Context, server *Server) error {
 				Debug:               server.config.Debug,
 			}
 
-			cc := NewControlChannelClient(ccConfig, server.Handler(), server, hc.Name, logging.Subsystem("broker.control-channel"))
+			cc := NewControlChannelClient(ccConfig, server.RawHandler(), server, hc.Name, logging.Subsystem("broker.control-channel"))
 			hc.mu.Lock()
 			hc.ControlChannel = cc
 			hc.mu.Unlock()

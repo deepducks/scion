@@ -21,7 +21,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/api"
 	"github.com/GoogleCloudPlatform/scion/pkg/util"
@@ -78,15 +77,11 @@ func getDefaultSettingsDataForRuntime(targetRuntime string) ([]byte, error) {
 }
 
 // GetDefaultSettingsData returns the embedded default settings in JSON format.
-// This function adjusts the local profile runtime based on the OS. It is used as
-// a fallback default for settings loaders; during init, DetectLocalRuntime is used
-// instead for actual runtime probing.
+// The embedded defaults use "local" runtime which factory.go auto-detects to the
+// best available runtime (docker on macOS/Linux; container on macOS when the Apple
+// container CLI is present). OS-specific adjustment is no longer performed here.
 func GetDefaultSettingsData() ([]byte, error) {
-	targetRuntime := "docker"
-	if runtime.GOOS == "darwin" {
-		targetRuntime = "container"
-	}
-	return getDefaultSettingsDataForRuntime(targetRuntime)
+	return getDefaultSettingsDataForRuntime("local")
 }
 
 // SeedFileFromFS writes a file from an embed.FS to a target path.

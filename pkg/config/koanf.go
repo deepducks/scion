@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/json"
@@ -213,16 +212,17 @@ func loadSettingsFile(k *koanf.Koanf, dir string) error {
 
 // getDefaultSettingsYAMLForRuntime generates the default settings YAML with the
 // specified runtime for the local profile. The embedded template defaults to
-// "container"; if a different runtime is specified, the template is adjusted.
+// "local" (auto-detected); if a different runtime is specified, the template
+// is adjusted via a string replacement.
 func getDefaultSettingsYAMLForRuntime(targetRuntime string) ([]byte, error) {
 	data, err := EmbedsFS.ReadFile("embeds/default_settings.yaml")
 	if err != nil {
 		return nil, err
 	}
 
-	if targetRuntime != "container" {
+	if targetRuntime != "local" {
 		data = bytes.Replace(data,
-			[]byte("runtime: container  # Auto-adjusted by OS"),
+			[]byte("runtime: local  # Auto-detected by OS"),
 			[]byte(fmt.Sprintf("runtime: %s  # Auto-detected", targetRuntime)),
 			1)
 	}
@@ -231,14 +231,11 @@ func getDefaultSettingsYAMLForRuntime(targetRuntime string) ([]byte, error) {
 }
 
 // GetDefaultSettingsDataYAML returns the embedded default settings in YAML format.
-// This function adjusts the local profile runtime based on the OS. It is used as
-// a fallback default for settings loaders; during init, DetectLocalRuntime is used
-// instead for actual runtime probing.
+// The embedded defaults use "local" runtime which factory.go auto-detects to the
+// best available runtime (docker on macOS/Linux; container on macOS when the Apple
+// container CLI is present). OS-specific adjustment is no longer performed here.
 func GetDefaultSettingsDataYAML() ([]byte, error) {
-	if goruntime.GOOS != "darwin" {
-		return getDefaultSettingsYAMLForRuntime("docker")
-	}
-	return getDefaultSettingsYAMLForRuntime("container")
+	return getDefaultSettingsYAMLForRuntime("local")
 }
 
 // GetGroveDefaultSettingsYAML returns the embedded grove-level default settings YAML.

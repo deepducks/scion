@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -690,12 +689,9 @@ func TestGetDefaultSettingsData_ProducesSameEffectiveDefaults(t *testing.T) {
 	assert.Contains(t, settings.Profiles, "local")
 	assert.Contains(t, settings.Profiles, "remote")
 
-	// OS-specific runtime check
-	expectedRuntime := "docker"
-	if runtime.GOOS == "darwin" {
-		expectedRuntime = "container"
-	}
-	assert.Equal(t, expectedRuntime, settings.Profiles["local"].Runtime)
+	// The local profile uses "local" runtime on all platforms so that
+	// factory.go can auto-detect the best available runtime.
+	assert.Equal(t, "local", settings.Profiles["local"].Runtime)
 }
 
 func TestDefaultSettingsValidateAgainstSchema(t *testing.T) {
@@ -712,18 +708,15 @@ func TestDefaultSettingsDataYAML_OSAdjustment(t *testing.T) {
 	data, err := GetDefaultSettingsDataYAML()
 	require.NoError(t, err)
 
-	// Parse as versioned settings to check OS adjustment
+	// Parse as versioned settings to check runtime value
 	var vs VersionedSettings
 	require.NoError(t, yaml.Unmarshal(data, &vs))
 
-	expectedRuntime := "docker"
-	if runtime.GOOS == "darwin" {
-		expectedRuntime = "container"
-	}
-
+	// The local profile uses "local" runtime on all platforms so that
+	// factory.go can auto-detect the best available runtime.
 	localProfile, ok := vs.Profiles["local"]
 	require.True(t, ok, "local profile should exist")
-	assert.Equal(t, expectedRuntime, localProfile.Runtime)
+	assert.Equal(t, "local", localProfile.Runtime)
 }
 
 // --- Adapter round-trip consistency ---

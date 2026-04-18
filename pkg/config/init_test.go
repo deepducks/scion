@@ -41,10 +41,12 @@ func TestGetDefaultSettingsData_OSSpecific(t *testing.T) {
 		t.Fatal("local profile not found in default settings")
 	}
 
-	expectedRuntime := "docker"
-	if runtime.GOOS == "darwin" {
-		expectedRuntime = "container"
-	}
+	// The local profile uses "local" runtime on all platforms so that
+	// factory.go can auto-detect the best available runtime (docker on
+	// macOS/Linux when the Apple container CLI is absent; container on
+	// macOS when the container CLI is present). Hardcoding "container"
+	// caused failures on machines without the Apple container CLI.
+	expectedRuntime := "local"
 
 	if localProfile.Runtime != expectedRuntime {
 		t.Errorf("expected runtime %q for OS %q, got %q", expectedRuntime, runtime.GOOS, localProfile.Runtime)
@@ -67,10 +69,12 @@ func TestGetDefaultSettingsDataYAML_OSSpecific(t *testing.T) {
 		t.Fatal("local profile not found in default settings")
 	}
 
-	expectedRuntime := "docker"
-	if runtime.GOOS == "darwin" {
-		expectedRuntime = "container"
-	}
+	// The local profile uses "local" runtime on all platforms so that
+	// factory.go can auto-detect the best available runtime (docker on
+	// macOS/Linux when the Apple container CLI is absent; container on
+	// macOS when the container CLI is present). Hardcoding "container"
+	// caused failures on machines without the Apple container CLI.
+	expectedRuntime := "local"
 
 	if localProfile.Runtime != expectedRuntime {
 		t.Errorf("expected runtime %q for OS %q, got %q", expectedRuntime, runtime.GOOS, localProfile.Runtime)
