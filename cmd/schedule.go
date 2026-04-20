@@ -444,20 +444,10 @@ func runScheduleCreate(cmd *cobra.Command, args []string) error {
 		if scheduleAgent != "" || scheduleMessage != "" {
 			return fmt.Errorf("--agent and --message cannot be used with --workflow (workflow_run events)")
 		}
-		if scheduleWorkflow == "" {
-			return fmt.Errorf("--workflow is required for workflow_run events")
-		}
-		yamlBytes, err := os.ReadFile(scheduleWorkflow)
+		var err error
+		workflowSource, workflowInputs, err = parseWorkflowScheduleFlags(scheduleWorkflow, scheduleInputsFile)
 		if err != nil {
-			return fmt.Errorf("failed to read workflow file %q: %w", scheduleWorkflow, err)
-		}
-		workflowSource = string(yamlBytes)
-		if scheduleInputsFile != "" {
-			inputBytes, err := os.ReadFile(scheduleInputsFile)
-			if err != nil {
-				return fmt.Errorf("failed to read inputs file %q: %w", scheduleInputsFile, err)
-			}
-			workflowInputs = string(inputBytes)
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported event type: %q (supported: message, dispatch_agent, workflow_run)", scheduleType)
@@ -552,20 +542,10 @@ func runScheduleCreateRecurring(cmd *cobra.Command, args []string) error {
 		if scheduleAgent != "" || scheduleMessage != "" {
 			return fmt.Errorf("--agent and --message cannot be used with --workflow (workflow_run schedules)")
 		}
-		if scheduleWorkflow == "" {
-			return fmt.Errorf("--workflow is required for workflow_run schedules")
-		}
-		yamlBytes, err := os.ReadFile(scheduleWorkflow)
+		var err error
+		workflowSource, workflowInputs, err = parseWorkflowScheduleFlags(scheduleWorkflow, scheduleInputsFile)
 		if err != nil {
-			return fmt.Errorf("failed to read workflow file %q: %w", scheduleWorkflow, err)
-		}
-		workflowSource = string(yamlBytes)
-		if scheduleInputsFile != "" {
-			inputBytes, err := os.ReadFile(scheduleInputsFile)
-			if err != nil {
-				return fmt.Errorf("failed to read inputs file %q: %w", scheduleInputsFile, err)
-			}
-			workflowInputs = string(inputBytes)
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported event type: %q (supported: message, dispatch_agent, workflow_run)", scheduleType)
@@ -799,6 +779,29 @@ func runScheduleHistory(cmd *cobra.Command, args []string) error {
 	w.Flush()
 
 	return nil
+}
+
+// parseWorkflowScheduleFlags validates and loads the --workflow and --inputs-file
+// flags for a workflow_run schedule event. Returns the YAML source and JSON
+// inputs envelope or a Cobra-friendly error. Used by both one-shot and
+// recurring schedule creation flows.
+func parseWorkflowScheduleFlags(workflowPath, inputsPath string) (sourceYAML, inputsJSON string, err error) {
+	if workflowPath == "" {
+		return "", "", fmt.Errorf("--workflow is required for workflow_run events")
+	}
+	yamlBytes, err := os.ReadFile(workflowPath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read workflow file %q: %w", workflowPath, err)
+	}
+	sourceYAML = string(yamlBytes)
+	if inputsPath != "" {
+		inputBytes, err := os.ReadFile(inputsPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read inputs file %q: %w", inputsPath, err)
+		}
+		inputsJSON = string(inputBytes)
+	}
+	return sourceYAML, inputsJSON, nil
 }
 
 // formatScheduleTime returns a human-readable time description for an event.
