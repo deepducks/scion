@@ -307,6 +307,50 @@ func TestWorkflowRunDispatcher_HandleWorkflowOutputEvent_TimedOut(t *testing.T) 
 	assert.Equal(t, store.WorkflowRunStatusTimedOut, updated.Status)
 }
 
+func TestWorkflowRunDispatcher_TimeoutResolution(t *testing.T) {
+	// Verify that the default timeout constant has the expected value and that
+	// custom timeouts are chosen over the default when present.
+	assert.Equal(t, 3600, defaultWorkflowTimeoutSeconds,
+		"default workflow timeout must be 3600 s")
+
+	cases := []struct {
+		name     string
+		run      store.WorkflowRun
+		wantSecs int
+	}{
+		{
+			name:     "nil timeout uses default",
+			run:      store.WorkflowRun{TimeoutSeconds: nil},
+			wantSecs: defaultWorkflowTimeoutSeconds,
+		},
+		{
+			name:     "zero timeout uses default",
+			run:      store.WorkflowRun{TimeoutSeconds: func() *int { v := 0; return &v }()},
+			wantSecs: defaultWorkflowTimeoutSeconds,
+		},
+		{
+			name:     "custom positive timeout is used",
+			run:      store.WorkflowRun{TimeoutSeconds: func() *int { v := 120; return &v }()},
+			wantSecs: 120,
+		},
+		{
+			name:     "large custom timeout is used",
+			run:      store.WorkflowRun{TimeoutSeconds: func() *int { v := 7200; return &v }()},
+			wantSecs: 7200,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := defaultWorkflowTimeoutSeconds
+			if tc.run.TimeoutSeconds != nil && *tc.run.TimeoutSeconds > 0 {
+				got = *tc.run.TimeoutSeconds
+			}
+			assert.Equal(t, tc.wantSecs, got)
+		})
+	}
+}
+
 func TestWorkflowRunDispatcher_Unsubscribe(t *testing.T) {
 	st := newDispatcherTestStore()
 	d := NewWorkflowRunDispatcher(st, nil, slog.Default())

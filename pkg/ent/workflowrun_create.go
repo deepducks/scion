@@ -160,6 +160,20 @@ func (_c *WorkflowRunCreate) SetNillableCreatedByAgentID(v *uuid.UUID) *Workflow
 	return _c
 }
 
+// SetTimeoutSeconds sets the "timeout_seconds" field.
+func (_c *WorkflowRunCreate) SetTimeoutSeconds(v int) *WorkflowRunCreate {
+	_c.mutation.SetTimeoutSeconds(v)
+	return _c
+}
+
+// SetNillableTimeoutSeconds sets the "timeout_seconds" field if the given value is not nil.
+func (_c *WorkflowRunCreate) SetNillableTimeoutSeconds(v *int) *WorkflowRunCreate {
+	if v != nil {
+		_c.SetTimeoutSeconds(*v)
+	}
+	return _c
+}
+
 // SetCreated sets the "created" field.
 func (_c *WorkflowRunCreate) SetCreated(v time.Time) *WorkflowRunCreate {
 	_c.mutation.SetCreated(v)
@@ -365,6 +379,10 @@ func (_c *WorkflowRunCreate) createSpec() (*WorkflowRun, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FinishedAt(); ok {
 		_spec.SetField(workflowrun.FieldFinishedAt, field.TypeTime, value)
 		_node.FinishedAt = &value
+	}
+	if value, ok := _c.mutation.TimeoutSeconds(); ok {
+		_spec.SetField(workflowrun.FieldTimeoutSeconds, field.TypeInt, value)
+		_node.TimeoutSeconds = &value
 	}
 	if value, ok := _c.mutation.Created(); ok {
 		_spec.SetField(workflowrun.FieldCreated, field.TypeTime, value)

@@ -8290,6 +8290,8 @@ type WorkflowRunMutation struct {
 	trace_url               *string
 	started_at              *time.Time
 	finished_at             *time.Time
+	timeout_seconds         *int
+	addtimeout_seconds      *int
 	created                 *time.Time
 	updated                 *time.Time
 	clearedFields           map[string]struct{}
@@ -8957,6 +8959,76 @@ func (m *WorkflowRunMutation) ResetCreatedByAgentID() {
 	delete(m.clearedFields, workflowrun.FieldCreatedByAgentID)
 }
 
+// SetTimeoutSeconds sets the "timeout_seconds" field.
+func (m *WorkflowRunMutation) SetTimeoutSeconds(i int) {
+	m.timeout_seconds = &i
+	m.addtimeout_seconds = nil
+}
+
+// TimeoutSeconds returns the value of the "timeout_seconds" field in the mutation.
+func (m *WorkflowRunMutation) TimeoutSeconds() (r int, exists bool) {
+	v := m.timeout_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimeoutSeconds returns the old "timeout_seconds" field's value of the WorkflowRun entity.
+// If the WorkflowRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowRunMutation) OldTimeoutSeconds(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimeoutSeconds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimeoutSeconds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimeoutSeconds: %w", err)
+	}
+	return oldValue.TimeoutSeconds, nil
+}
+
+// AddTimeoutSeconds adds i to the "timeout_seconds" field.
+func (m *WorkflowRunMutation) AddTimeoutSeconds(i int) {
+	if m.addtimeout_seconds != nil {
+		*m.addtimeout_seconds += i
+	} else {
+		m.addtimeout_seconds = &i
+	}
+}
+
+// AddedTimeoutSeconds returns the value that was added to the "timeout_seconds" field in this mutation.
+func (m *WorkflowRunMutation) AddedTimeoutSeconds() (r int, exists bool) {
+	v := m.addtimeout_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearTimeoutSeconds clears the value of the "timeout_seconds" field.
+func (m *WorkflowRunMutation) ClearTimeoutSeconds() {
+	m.timeout_seconds = nil
+	m.addtimeout_seconds = nil
+	m.clearedFields[workflowrun.FieldTimeoutSeconds] = struct{}{}
+}
+
+// TimeoutSecondsCleared returns if the "timeout_seconds" field was cleared in this mutation.
+func (m *WorkflowRunMutation) TimeoutSecondsCleared() bool {
+	_, ok := m.clearedFields[workflowrun.FieldTimeoutSeconds]
+	return ok
+}
+
+// ResetTimeoutSeconds resets all changes to the "timeout_seconds" field.
+func (m *WorkflowRunMutation) ResetTimeoutSeconds() {
+	m.timeout_seconds = nil
+	m.addtimeout_seconds = nil
+	delete(m.clearedFields, workflowrun.FieldTimeoutSeconds)
+}
+
 // SetCreated sets the "created" field.
 func (m *WorkflowRunMutation) SetCreated(t time.Time) {
 	m.created = &t
@@ -9144,7 +9216,7 @@ func (m *WorkflowRunMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowRunMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.grove != nil {
 		fields = append(fields, workflowrun.FieldGroveID)
 	}
@@ -9180,6 +9252,9 @@ func (m *WorkflowRunMutation) Fields() []string {
 	}
 	if m.created_by_agent != nil {
 		fields = append(fields, workflowrun.FieldCreatedByAgentID)
+	}
+	if m.timeout_seconds != nil {
+		fields = append(fields, workflowrun.FieldTimeoutSeconds)
 	}
 	if m.created != nil {
 		fields = append(fields, workflowrun.FieldCreated)
@@ -9219,6 +9294,8 @@ func (m *WorkflowRunMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedByUserID()
 	case workflowrun.FieldCreatedByAgentID:
 		return m.CreatedByAgentID()
+	case workflowrun.FieldTimeoutSeconds:
+		return m.TimeoutSeconds()
 	case workflowrun.FieldCreated:
 		return m.Created()
 	case workflowrun.FieldUpdated:
@@ -9256,6 +9333,8 @@ func (m *WorkflowRunMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldCreatedByUserID(ctx)
 	case workflowrun.FieldCreatedByAgentID:
 		return m.OldCreatedByAgentID(ctx)
+	case workflowrun.FieldTimeoutSeconds:
+		return m.OldTimeoutSeconds(ctx)
 	case workflowrun.FieldCreated:
 		return m.OldCreated(ctx)
 	case workflowrun.FieldUpdated:
@@ -9353,6 +9432,13 @@ func (m *WorkflowRunMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedByAgentID(v)
 		return nil
+	case workflowrun.FieldTimeoutSeconds:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimeoutSeconds(v)
+		return nil
 	case workflowrun.FieldCreated:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -9374,13 +9460,21 @@ func (m *WorkflowRunMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *WorkflowRunMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addtimeout_seconds != nil {
+		fields = append(fields, workflowrun.FieldTimeoutSeconds)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *WorkflowRunMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case workflowrun.FieldTimeoutSeconds:
+		return m.AddedTimeoutSeconds()
+	}
 	return nil, false
 }
 
@@ -9389,6 +9483,13 @@ func (m *WorkflowRunMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *WorkflowRunMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case workflowrun.FieldTimeoutSeconds:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTimeoutSeconds(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowRun numeric field %s", name)
 }
@@ -9423,6 +9524,9 @@ func (m *WorkflowRunMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(workflowrun.FieldCreatedByAgentID) {
 		fields = append(fields, workflowrun.FieldCreatedByAgentID)
+	}
+	if m.FieldCleared(workflowrun.FieldTimeoutSeconds) {
+		fields = append(fields, workflowrun.FieldTimeoutSeconds)
 	}
 	return fields
 }
@@ -9464,6 +9568,9 @@ func (m *WorkflowRunMutation) ClearField(name string) error {
 		return nil
 	case workflowrun.FieldCreatedByAgentID:
 		m.ClearCreatedByAgentID()
+		return nil
+	case workflowrun.FieldTimeoutSeconds:
+		m.ClearTimeoutSeconds()
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowRun nullable field %s", name)
@@ -9508,6 +9615,9 @@ func (m *WorkflowRunMutation) ResetField(name string) error {
 		return nil
 	case workflowrun.FieldCreatedByAgentID:
 		m.ResetCreatedByAgentID()
+		return nil
+	case workflowrun.FieldTimeoutSeconds:
+		m.ResetTimeoutSeconds()
 		return nil
 	case workflowrun.FieldCreated:
 		m.ResetCreated()

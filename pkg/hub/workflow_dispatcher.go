@@ -56,6 +56,10 @@ type WorkflowRunEvent struct {
 	Timestamp time.Time
 }
 
+// defaultWorkflowTimeoutSeconds is the fallback timeout sent to the broker when
+// the run has no user-specified timeout.
+const defaultWorkflowTimeoutSeconds = 3600
+
 // WorkflowRunDispatcher manages the lifecycle dispatch for workflow runs.
 // It selects a broker for queued runs, sends run_workflow commands, and
 // updates the store in response to broker events.
@@ -131,13 +135,20 @@ func (d *WorkflowRunDispatcher) dispatch(ctx context.Context, runID string) {
 		return
 	}
 
+	// Resolve timeout: use the user-specified value if present and positive,
+	// otherwise fall back to the server default.
+	timeoutSeconds := defaultWorkflowTimeoutSeconds
+	if run.TimeoutSeconds != nil && *run.TimeoutSeconds > 0 {
+		timeoutSeconds = *run.TimeoutSeconds
+	}
+
 	// Build the run_workflow payload and send to the broker.
 	payload := map[string]interface{}{
 		"runId":          run.ID,
 		"groveId":        run.GroveID,
 		"sourceYaml":     run.SourceYaml,
 		"inputsJson":     run.InputsJSON,
-		"timeoutSeconds": 3600,
+		"timeoutSeconds": timeoutSeconds,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -234,9 +245,6 @@ func (d *WorkflowRunDispatcher) HandleWorkflowStatusEvent(ctx context.Context, b
 	d.log.Info("WorkflowRunDispatcher: workflow status event", "runID", payload.RunID, "status", payload.Status)
 
 	fromStatuses := []string{store.WorkflowRunStatusProvisioning}
-	if payload.Status == store.WorkflowRunStatusRunning {
-		fromStatuses = []string{store.WorkflowRunStatusProvisioning}
-	}
 
 	var startedAt *time.Time
 	if payload.Status == store.WorkflowRunStatusRunning {
@@ -310,12 +318,13 @@ func (d *WorkflowRunDispatcher) HandleWorkflowOutputEvent(ctx context.Context, b
 		Timestamp: time.Now(),
 	})
 
-	// Clean up buffered logs and subscribers after a short delay so any
-	// in-flight WSS readers can drain their queues.
-	go func() {
-		time.Sleep(5 * time.Minute)
+	// Clean up buffered logs and subscribers after a grace window so any
+	// in-flight WSS readers can drain their queues. time.AfterFunc runs on
+	// a shared timer goroutine rather than spawning one goroutine per run,
+	// keeping cleanup cost O(1) in high-throughput environments.
+	time.AfterFunc(5*time.Minute, func() {
 		d.cleanupRun(payload.RunID)
-	}()
+	})
 }
 
 // HandleWorkflowLogEvent processes a workflow_log event from a broker.

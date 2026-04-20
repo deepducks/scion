@@ -77,6 +77,9 @@ func entWorkflowRunToStore(r *ent.WorkflowRun) *store.WorkflowRun {
 		s := r.CreatedByAgentID.String()
 		m.CreatedByAgentID = &s
 	}
+	if r.TimeoutSeconds != nil {
+		m.TimeoutSeconds = r.TimeoutSeconds
+	}
 	return m
 }
 
@@ -112,6 +115,9 @@ func (s *WorkflowRunStore) CreateWorkflowRun(ctx context.Context, run *store.Wor
 		if err == nil {
 			c = c.SetCreatedByAgentID(aid)
 		}
+	}
+	if run.TimeoutSeconds != nil {
+		c = c.SetNillableTimeoutSeconds(run.TimeoutSeconds)
 	}
 
 	if _, err := c.Save(ctx); err != nil {

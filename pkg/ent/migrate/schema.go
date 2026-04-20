@@ -251,6 +251,7 @@ var (
 		{Name: "trace_url", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "timeout_seconds", Type: field.TypeInt, Nullable: true},
 		{Name: "created", Type: field.TypeTime},
 		{Name: "updated", Type: field.TypeTime},
 		{Name: "created_by_agent_id", Type: field.TypeUUID, Nullable: true},
@@ -265,19 +266,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_runs_agents_created_workflow_runs",
-				Columns:    []*schema.Column{WorkflowRunsColumns[12]},
+				Columns:    []*schema.Column{WorkflowRunsColumns[13]},
 				RefColumns: []*schema.Column{AgentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "workflow_runs_groves_workflow_runs",
-				Columns:    []*schema.Column{WorkflowRunsColumns[13]},
+				Columns:    []*schema.Column{WorkflowRunsColumns[14]},
 				RefColumns: []*schema.Column{GrovesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "workflow_runs_users_created_workflow_runs",
-				Columns:    []*schema.Column{WorkflowRunsColumns[14]},
+				Columns:    []*schema.Column{WorkflowRunsColumns[15]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -286,7 +287,7 @@ var (
 			{
 				Name:    "workflowrun_grove_id_created",
 				Unique:  false,
-				Columns: []*schema.Column{WorkflowRunsColumns[13], WorkflowRunsColumns[10]},
+				Columns: []*schema.Column{WorkflowRunsColumns[14], WorkflowRunsColumns[11]},
 			},
 			{
 				Name:    "workflowrun_status",

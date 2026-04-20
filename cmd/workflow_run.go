@@ -40,6 +40,7 @@ var (
 	workflowRunViaHub       bool
 	workflowRunWait         *bool // nil means auto-detect via TTY
 	workflowRunGroveID      string
+	workflowRunTimeout      int // 0 = server default
 )
 
 // workflowRunCmd runs a duckflux workflow file locally via quack or via the Hub.
@@ -166,6 +167,10 @@ func runWorkflowRunViaHub(cmd *cobra.Command, file string) error {
 		GroveID:    groveID,
 		SourceYAML: sourceYAML,
 		Inputs:     inputsJSON,
+	}
+	if workflowRunTimeout > 0 {
+		t := workflowRunTimeout
+		req.TimeoutSeconds = &t
 	}
 
 	ctx := cmd.Context()
@@ -295,6 +300,7 @@ func init() {
 	// Hub dispatch flags.
 	workflowRunCmd.Flags().BoolVar(&workflowRunViaHub, "via-hub", false, "Dispatch workflow run via the Hub instead of running locally")
 	workflowRunCmd.Flags().StringVar(&workflowRunGroveID, "grove-id", "", "Grove ID for Hub dispatch (overrides grove resolution)")
+	workflowRunCmd.Flags().IntVar(&workflowRunTimeout, "timeout", 0, "Max runtime in seconds before the run is force-failed (0 = server default)")
 
 	// --wait flag: tri-state (unset = auto, true, false).
 	workflowRunCmd.Flags().Func("wait", "Wait for run to complete and stream logs (default: auto; true when stdout is a TTY)", func(s string) error {

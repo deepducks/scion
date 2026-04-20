@@ -111,6 +111,11 @@ func CreatedByAgentID(v uuid.UUID) predicate.WorkflowRun {
 	return predicate.WorkflowRun(sql.FieldEQ(FieldCreatedByAgentID, v))
 }
 
+// TimeoutSeconds applies equality check predicate on the "timeout_seconds" field. It's identical to TimeoutSecondsEQ.
+func TimeoutSeconds(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEQ(FieldTimeoutSeconds, v))
+}
+
 // Created applies equality check predicate on the "created" field. It's identical to CreatedEQ.
 func Created(v time.Time) predicate.WorkflowRun {
 	return predicate.WorkflowRun(sql.FieldEQ(FieldCreated, v))
@@ -709,6 +714,56 @@ func CreatedByAgentIDIsNil() predicate.WorkflowRun {
 // CreatedByAgentIDNotNil applies the NotNil predicate on the "created_by_agent_id" field.
 func CreatedByAgentIDNotNil() predicate.WorkflowRun {
 	return predicate.WorkflowRun(sql.FieldNotNull(FieldCreatedByAgentID))
+}
+
+// TimeoutSecondsEQ applies the EQ predicate on the "timeout_seconds" field.
+func TimeoutSecondsEQ(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEQ(FieldTimeoutSeconds, v))
+}
+
+// TimeoutSecondsNEQ applies the NEQ predicate on the "timeout_seconds" field.
+func TimeoutSecondsNEQ(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNEQ(FieldTimeoutSeconds, v))
+}
+
+// TimeoutSecondsIn applies the In predicate on the "timeout_seconds" field.
+func TimeoutSecondsIn(vs ...int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldIn(FieldTimeoutSeconds, vs...))
+}
+
+// TimeoutSecondsNotIn applies the NotIn predicate on the "timeout_seconds" field.
+func TimeoutSecondsNotIn(vs ...int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNotIn(FieldTimeoutSeconds, vs...))
+}
+
+// TimeoutSecondsGT applies the GT predicate on the "timeout_seconds" field.
+func TimeoutSecondsGT(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldGT(FieldTimeoutSeconds, v))
+}
+
+// TimeoutSecondsGTE applies the GTE predicate on the "timeout_seconds" field.
+func TimeoutSecondsGTE(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldGTE(FieldTimeoutSeconds, v))
+}
+
+// TimeoutSecondsLT applies the LT predicate on the "timeout_seconds" field.
+func TimeoutSecondsLT(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldLT(FieldTimeoutSeconds, v))
+}
+
+// TimeoutSecondsLTE applies the LTE predicate on the "timeout_seconds" field.
+func TimeoutSecondsLTE(v int) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldLTE(FieldTimeoutSeconds, v))
+}
+
+// TimeoutSecondsIsNil applies the IsNil predicate on the "timeout_seconds" field.
+func TimeoutSecondsIsNil() predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldIsNull(FieldTimeoutSeconds))
+}
+
+// TimeoutSecondsNotNil applies the NotNil predicate on the "timeout_seconds" field.
+func TimeoutSecondsNotNil() predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNotNull(FieldTimeoutSeconds))
 }
 
 // CreatedEQ applies the EQ predicate on the "created" field.

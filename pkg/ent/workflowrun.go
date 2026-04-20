@@ -45,6 +45,8 @@ type WorkflowRun struct {
 	CreatedByUserID *uuid.UUID `json:"created_by_user_id,omitempty"`
 	// CreatedByAgentID holds the value of the "created_by_agent_id" field.
 	CreatedByAgentID *uuid.UUID `json:"created_by_agent_id,omitempty"`
+	// User-specified timeout in seconds; nil means use server default
+	TimeoutSeconds *int `json:"timeout_seconds,omitempty"`
 	// Created holds the value of the "created" field.
 	Created time.Time `json:"created,omitempty"`
 	// Updated holds the value of the "updated" field.
@@ -110,6 +112,8 @@ func (*WorkflowRun) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case workflowrun.FieldInputsJSON, workflowrun.FieldResultJSON:
 			values[i] = new([]byte)
+		case workflowrun.FieldTimeoutSeconds:
+			values[i] = new(sql.NullInt64)
 		case workflowrun.FieldBrokerID, workflowrun.FieldSourceYaml, workflowrun.FieldStatus, workflowrun.FieldErrorMessage, workflowrun.FieldTraceURL:
 			values[i] = new(sql.NullString)
 		case workflowrun.FieldStartedAt, workflowrun.FieldFinishedAt, workflowrun.FieldCreated, workflowrun.FieldUpdated:
@@ -215,6 +219,13 @@ func (_m *WorkflowRun) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CreatedByAgentID = new(uuid.UUID)
 				*_m.CreatedByAgentID = *value.S.(*uuid.UUID)
+			}
+		case workflowrun.FieldTimeoutSeconds:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field timeout_seconds", values[i])
+			} else if value.Valid {
+				_m.TimeoutSeconds = new(int)
+				*_m.TimeoutSeconds = int(value.Int64)
 			}
 		case workflowrun.FieldCreated:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -330,6 +341,11 @@ func (_m *WorkflowRun) String() string {
 	builder.WriteString(", ")
 	if v := _m.CreatedByAgentID; v != nil {
 		builder.WriteString("created_by_agent_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TimeoutSeconds; v != nil {
+		builder.WriteString("timeout_seconds=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

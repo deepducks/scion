@@ -659,15 +659,16 @@ type WorkflowRunCreatedBy struct {
 // responses. Heavy fields (source, inputs, result) are omitted; fetch via
 // GET /api/v1/workflows/runs/{runId}?include=source,inputs,result.
 type WorkflowRunSummary struct {
-	ID         string               `json:"id"`
-	GroveID    string               `json:"groveId"`
-	BrokerID   *string              `json:"brokerId,omitempty"`
-	Status     string               `json:"status"`
-	TraceURL   *string              `json:"traceUrl,omitempty"`
-	StartedAt  *time.Time           `json:"startedAt,omitempty"`
-	FinishedAt *time.Time           `json:"finishedAt,omitempty"`
-	CreatedAt  time.Time            `json:"createdAt"`
-	CreatedBy  WorkflowRunCreatedBy `json:"createdBy"`
+	ID             string               `json:"id"`
+	GroveID        string               `json:"groveId"`
+	BrokerID       *string              `json:"brokerId,omitempty"`
+	Status         string               `json:"status"`
+	TraceURL       *string              `json:"traceUrl,omitempty"`
+	StartedAt      *time.Time           `json:"startedAt,omitempty"`
+	FinishedAt     *time.Time           `json:"finishedAt,omitempty"`
+	CreatedAt      time.Time            `json:"createdAt"`
+	CreatedBy      WorkflowRunCreatedBy `json:"createdBy"`
+	TimeoutSeconds *int                 `json:"timeoutSeconds,omitempty"`
 }
 
 // WorkflowRunDetail is the full representation returned by GET /runs/{runId}.
@@ -685,9 +686,10 @@ type WorkflowRunDetail struct {
 
 // WorkflowRunCreateRequest is the request body for POST /api/v1/workflows/runs.
 type WorkflowRunCreateRequest struct {
-	GroveID    string `json:"groveId"`
-	SourceYAML string `json:"sourceYaml"`
-	Inputs     string `json:"inputs,omitempty"` // arbitrary JSON
+	GroveID        string `json:"groveId"`
+	SourceYAML     string `json:"sourceYaml"`
+	Inputs         string `json:"inputs,omitempty"`         // arbitrary JSON
+	TimeoutSeconds *int   `json:"timeoutSeconds,omitempty"` // nil = server default (3600 s)
 }
 
 // WorkflowRunListResponse is the response for GET /api/v1/workflows/runs.

@@ -238,6 +238,33 @@ func (_u *WorkflowRunUpdate) ClearCreatedByAgentID() *WorkflowRunUpdate {
 	return _u
 }
 
+// SetTimeoutSeconds sets the "timeout_seconds" field.
+func (_u *WorkflowRunUpdate) SetTimeoutSeconds(v int) *WorkflowRunUpdate {
+	_u.mutation.ResetTimeoutSeconds()
+	_u.mutation.SetTimeoutSeconds(v)
+	return _u
+}
+
+// SetNillableTimeoutSeconds sets the "timeout_seconds" field if the given value is not nil.
+func (_u *WorkflowRunUpdate) SetNillableTimeoutSeconds(v *int) *WorkflowRunUpdate {
+	if v != nil {
+		_u.SetTimeoutSeconds(*v)
+	}
+	return _u
+}
+
+// AddTimeoutSeconds adds value to the "timeout_seconds" field.
+func (_u *WorkflowRunUpdate) AddTimeoutSeconds(v int) *WorkflowRunUpdate {
+	_u.mutation.AddTimeoutSeconds(v)
+	return _u
+}
+
+// ClearTimeoutSeconds clears the value of the "timeout_seconds" field.
+func (_u *WorkflowRunUpdate) ClearTimeoutSeconds() *WorkflowRunUpdate {
+	_u.mutation.ClearTimeoutSeconds()
+	return _u
+}
+
 // SetUpdated sets the "updated" field.
 func (_u *WorkflowRunUpdate) SetUpdated(v time.Time) *WorkflowRunUpdate {
 	_u.mutation.SetUpdated(v)
@@ -390,6 +417,15 @@ func (_u *WorkflowRunUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.FinishedAtCleared() {
 		_spec.ClearField(workflowrun.FieldFinishedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TimeoutSeconds(); ok {
+		_spec.SetField(workflowrun.FieldTimeoutSeconds, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTimeoutSeconds(); ok {
+		_spec.AddField(workflowrun.FieldTimeoutSeconds, field.TypeInt, value)
+	}
+	if _u.mutation.TimeoutSecondsCleared() {
+		_spec.ClearField(workflowrun.FieldTimeoutSeconds, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Updated(); ok {
 		_spec.SetField(workflowrun.FieldUpdated, field.TypeTime, value)
@@ -707,6 +743,33 @@ func (_u *WorkflowRunUpdateOne) ClearCreatedByAgentID() *WorkflowRunUpdateOne {
 	return _u
 }
 
+// SetTimeoutSeconds sets the "timeout_seconds" field.
+func (_u *WorkflowRunUpdateOne) SetTimeoutSeconds(v int) *WorkflowRunUpdateOne {
+	_u.mutation.ResetTimeoutSeconds()
+	_u.mutation.SetTimeoutSeconds(v)
+	return _u
+}
+
+// SetNillableTimeoutSeconds sets the "timeout_seconds" field if the given value is not nil.
+func (_u *WorkflowRunUpdateOne) SetNillableTimeoutSeconds(v *int) *WorkflowRunUpdateOne {
+	if v != nil {
+		_u.SetTimeoutSeconds(*v)
+	}
+	return _u
+}
+
+// AddTimeoutSeconds adds value to the "timeout_seconds" field.
+func (_u *WorkflowRunUpdateOne) AddTimeoutSeconds(v int) *WorkflowRunUpdateOne {
+	_u.mutation.AddTimeoutSeconds(v)
+	return _u
+}
+
+// ClearTimeoutSeconds clears the value of the "timeout_seconds" field.
+func (_u *WorkflowRunUpdateOne) ClearTimeoutSeconds() *WorkflowRunUpdateOne {
+	_u.mutation.ClearTimeoutSeconds()
+	return _u
+}
+
 // SetUpdated sets the "updated" field.
 func (_u *WorkflowRunUpdateOne) SetUpdated(v time.Time) *WorkflowRunUpdateOne {
 	_u.mutation.SetUpdated(v)
@@ -889,6 +952,15 @@ func (_u *WorkflowRunUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowRun
 	}
 	if _u.mutation.FinishedAtCleared() {
 		_spec.ClearField(workflowrun.FieldFinishedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TimeoutSeconds(); ok {
+		_spec.SetField(workflowrun.FieldTimeoutSeconds, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTimeoutSeconds(); ok {
+		_spec.AddField(workflowrun.FieldTimeoutSeconds, field.TypeInt, value)
+	}
+	if _u.mutation.TimeoutSecondsCleared() {
+		_spec.ClearField(workflowrun.FieldTimeoutSeconds, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Updated(); ok {
 		_spec.SetField(workflowrun.FieldUpdated, field.TypeTime, value)

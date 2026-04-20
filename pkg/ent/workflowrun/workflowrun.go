@@ -40,6 +40,8 @@ const (
 	FieldCreatedByUserID = "created_by_user_id"
 	// FieldCreatedByAgentID holds the string denoting the created_by_agent_id field in the database.
 	FieldCreatedByAgentID = "created_by_agent_id"
+	// FieldTimeoutSeconds holds the string denoting the timeout_seconds field in the database.
+	FieldTimeoutSeconds = "timeout_seconds"
 	// FieldCreated holds the string denoting the created field in the database.
 	FieldCreated = "created"
 	// FieldUpdated holds the string denoting the updated field in the database.
@@ -90,6 +92,7 @@ var Columns = []string{
 	FieldFinishedAt,
 	FieldCreatedByUserID,
 	FieldCreatedByAgentID,
+	FieldTimeoutSeconds,
 	FieldCreated,
 	FieldUpdated,
 }
@@ -202,6 +205,11 @@ func ByCreatedByUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedByAgentID orders the results by the created_by_agent_id field.
 func ByCreatedByAgentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedByAgentID, opts...).ToFunc()
+}
+
+// ByTimeoutSeconds orders the results by the timeout_seconds field.
+func ByTimeoutSeconds(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimeoutSeconds, opts...).ToFunc()
 }
 
 // ByCreated orders the results by the created field.

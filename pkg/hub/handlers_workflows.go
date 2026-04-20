@@ -222,6 +222,7 @@ func (s *Server) createWorkflowRun(w http.ResponseWriter, r *http.Request, grove
 		Status:           store.WorkflowRunStatusQueued,
 		CreatedByUserID:  createdByUserID,
 		CreatedByAgentID: createdByAgentID,
+		TimeoutSeconds:   req.TimeoutSeconds,
 	}
 
 	if err := s.store.CreateWorkflowRun(ctx, run); err != nil {
@@ -550,14 +551,15 @@ func (s *Server) streamWorkflowRunLogs(w http.ResponseWriter, r *http.Request, r
 // toWorkflowRunSummary converts a store.WorkflowRun to the wire summary type.
 func toWorkflowRunSummary(r *store.WorkflowRun) api.WorkflowRunSummary {
 	s := api.WorkflowRunSummary{
-		ID:         r.ID,
-		GroveID:    r.GroveID,
-		BrokerID:   r.BrokerID,
-		Status:     r.Status,
-		TraceURL:   r.TraceURL,
-		StartedAt:  r.StartedAt,
-		FinishedAt: r.FinishedAt,
-		CreatedAt:  r.Created,
+		ID:             r.ID,
+		GroveID:        r.GroveID,
+		BrokerID:       r.BrokerID,
+		Status:         r.Status,
+		TraceURL:       r.TraceURL,
+		StartedAt:      r.StartedAt,
+		FinishedAt:     r.FinishedAt,
+		CreatedAt:      r.Created,
+		TimeoutSeconds: r.TimeoutSeconds,
 		CreatedBy: api.WorkflowRunCreatedBy{
 			UserID:  r.CreatedByUserID,
 			AgentID: r.CreatedByAgentID,

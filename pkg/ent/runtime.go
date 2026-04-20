@@ -174,11 +174,11 @@ func init() {
 	workflowrunFields := schema.WorkflowRun{}.Fields()
 	_ = workflowrunFields
 	// workflowrunDescCreated is the schema descriptor for created field.
-	workflowrunDescCreated := workflowrunFields[13].Descriptor()
+	workflowrunDescCreated := workflowrunFields[14].Descriptor()
 	// workflowrun.DefaultCreated holds the default value on creation for the created field.
 	workflowrun.DefaultCreated = workflowrunDescCreated.Default.(func() time.Time)
 	// workflowrunDescUpdated is the schema descriptor for updated field.
-	workflowrunDescUpdated := workflowrunFields[14].Descriptor()
+	workflowrunDescUpdated := workflowrunFields[15].Descriptor()
 	// workflowrun.DefaultUpdated holds the default value on creation for the updated field.
 	workflowrun.DefaultUpdated = workflowrunDescUpdated.Default.(func() time.Time)
 	// workflowrun.UpdateDefaultUpdated holds the default value on update for the updated field.

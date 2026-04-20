@@ -94,6 +94,12 @@ func (WorkflowRun) Fields() []ent.Field {
 		field.UUID("created_by_agent_id", uuid.UUID{}).
 			Optional().
 			Nillable(),
+		// timeout_seconds is the user-specified maximum run duration in seconds.
+		// nil means use the server default (currently 3600 s).
+		field.Int("timeout_seconds").
+			Optional().
+			Nillable().
+			Comment("User-specified timeout in seconds; nil means use server default"),
 		field.Time("created").
 			Default(time.Now).
 			Immutable(),

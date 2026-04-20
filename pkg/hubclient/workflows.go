@@ -77,9 +77,10 @@ type LogEvent struct {
 
 // CreateWorkflowRunRequest is the request body for CreateWorkflowRun.
 type CreateWorkflowRunRequest struct {
-	GroveID    string `json:"groveId"`
-	SourceYAML string `json:"sourceYaml"`
-	Inputs     string `json:"inputs,omitempty"`
+	GroveID        string `json:"groveId"`
+	SourceYAML     string `json:"sourceYaml"`
+	Inputs         string `json:"inputs,omitempty"`
+	TimeoutSeconds *int   `json:"timeoutSeconds,omitempty"` // nil = server default (3600 s)
 }
 
 // ListWorkflowRunsOptions configures workflow run listing.

@@ -1365,8 +1365,11 @@ type WorkflowRun struct {
 	FinishedAt       *time.Time `json:"finishedAt,omitempty"`
 	CreatedByUserID  *string    `json:"createdByUserId,omitempty"`
 	CreatedByAgentID *string    `json:"createdByAgentId,omitempty"`
-	Created          time.Time  `json:"created"`
-	Updated          time.Time  `json:"updated"`
+	// TimeoutSeconds is the user-specified maximum run duration in seconds.
+	// nil means use the server default (currently 3600 s).
+	TimeoutSeconds *int      `json:"timeoutSeconds,omitempty"`
+	Created        time.Time `json:"created"`
+	Updated        time.Time `json:"updated"`
 }
 
 // WorkflowRun status constants.
